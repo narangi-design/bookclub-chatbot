@@ -270,7 +270,7 @@ async def test_create_poll_calls_api_client():
     with patch("bot.api_client.get_poll_candidates", return_value=candidates) as mock_api:
         await createPoll(make_poll_update(), context)
 
-    mock_api.assert_called_once_with(n=4)
+    mock_api.assert_called_once_with(n=12)
     context.bot.send_poll.assert_called_once()
 
 
