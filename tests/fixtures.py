@@ -334,6 +334,21 @@ only_read_books = [
 empty_books: list = []
 
 
+# Кандидаты для опроса — структура, которую возвращает бэк (и mock_db)
+# {title, author_name, member_display_name} — готово к форматированию в боте
+poll_candidates = [
+    {"id": 4,  "title": "Пикник на обочине",         "author_name": "Аркадий и Борис Стругацкие", "member_display_name": "Павел"},
+    {"id": 5,  "title": "Автостопом по галактике",    "author_name": "Дуглас Адамс",               "member_display_name": "katya_book"},
+    {"id": 6,  "title": "Дюна",                       "author_name": "Фрэнк Герберт",              "member_display_name": "Павел"},
+    {"id": 7,  "title": "Мастер и Маргарита",         "author_name": "Михаил Булгаков",            "member_display_name": "Алёна"},
+]
+
+few_poll_candidates = [
+    {"id": 104, "title": "Пикник на обочине", "author_name": "Аркадий и Борис Стругацкие", "member_display_name": "Павел"},
+    {"id": 105, "title": "Дюна",              "author_name": "Фрэнк Герберт",              "member_display_name": "Павел"},
+]
+
+
 # --- Вспомогательные функции для тестов ---
 
 def get_author_by_id(author_id: int) -> dict | None:

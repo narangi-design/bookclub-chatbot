@@ -1,11 +1,11 @@
 import os
-import random
 import logging
 from dotenv import load_dotenv
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, CallbackQueryHandler, filters
-from mock_db import author_name_exists, get_book_by_title, get_books_by_status
-import api_client
+
+from handlers.books import addBook, addBook_title, addBook_author, cancel, removeBook, TITLE, AUTHOR
+from handlers.polls import createPoll, createPollTest
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -14,86 +14,15 @@ logging.basicConfig(
 
 load_dotenv()
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text='Привет, я ассистент книжного клуба! Я помогаю со списком книг и выбором книги для чтения.')
 
 async def hello(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(f'Привет, {update.effective_user.name}')
 
-TITLE, AUTHOR = range(2)
-
-cancel_button = InlineKeyboardMarkup([[InlineKeyboardButton("Отмена", callback_data="cancel")]])
-
 async def myid(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(f'Твой Telegram ID: {update.effective_user.id}')
-
-async def cancel(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
-    if update.callback_query:
-        await update.callback_query.answer()
-        await update.callback_query.edit_message_text('Добавление книги отменено.')
-    else:
-        await update.message.reply_text('Добавление книги отменено.')
-    return ConversationHandler.END
-
-async def addBook(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text('Название книги?', reply_markup=cancel_button)
-    return TITLE
-
-async def addBook_title(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['title'] = update.message.text
-    await update.message.reply_text(f'Книга "{update.message.text}", а кто автор? Формат: Имя Фамилия', reply_markup=cancel_button)
-    return AUTHOR
-
-async def addBook_author(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    title = context.user_data['title']
-    author = update.message.text
-
-    if author_name_exists(author):
-        await update.message.reply_text(f'В списке пополнение: "{title}", {author}')
-    else:
-        await update.message.reply_text(
-            f'Автор "{author}" не найден в базе, но книгу "{title}" добавил(а). '
-            f'Попроси администратора уточнить автора.'
-        )
-    return ConversationHandler.END
-
-async def removeBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    title = update.message.text.strip() if update.message.text else ''
-    book = get_book_by_title(title)
-    if book:
-        await update.message.reply_text(f'Книга "{title}" удалена из списка.')
-    else:
-        await update.message.reply_text(f'Книга "{title}" не найдена в списке.')
-
-async def _send_poll(update: Update, context: ContextTypes.DEFAULT_TYPE, books: list) -> None:
-    if not books:
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text='Нет книг для голосования. Сначала добавьте книги командой /add.'
-        )
-        return
-
-    options = [b["title"] for b in books]
-    await context.bot.send_poll(
-        chat_id=update.effective_chat.id,
-        question=f'Выбираем следующую книгу, {update.effective_chat.title}!',
-        options=options,
-        is_anonymous=False,
-        allows_multiple_answers=True,
-        open_period=86400,
-    )
-
-
-async def createPollTest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    books = get_books_by_status("to_read")
-    if len(books) > 4:
-        books = random.sample(books, 4)
-    await _send_poll(update, context, books)
-
-
-async def createPoll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    books = api_client.get_poll_candidates(n=12)
-    await _send_poll(update, context, books)
 
 
 if __name__ == '__main__':
