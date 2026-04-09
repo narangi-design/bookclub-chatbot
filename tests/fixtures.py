@@ -314,6 +314,26 @@ award_votes = [
 ]
 
 
+# Набор книг, где to_read меньше 4 — для проверки граничного случая опроса
+few_to_read_books = [
+    {"id": 101, "title": "Крутой маршрут",       "author_id": 57,  "added_by_member_id": 1, "added_at": "2022-03-19", "status": "read",    "country": None, "elected_poll_id": None, "elected_at": "2022-03-19", "annotation": None, "discussion_url": None},
+    {"id": 102, "title": "Vita Nostra",           "author_id": 79,  "added_by_member_id": 2, "added_at": "2022-04-09", "status": "read",    "country": None, "elected_poll_id": None, "elected_at": "2022-04-10", "annotation": None, "discussion_url": None},
+    {"id": 103, "title": "Сто лет одиночества",   "author_id": 28,  "added_by_member_id": 2, "added_at": "2025-11-20", "status": "removed", "country": None, "elected_poll_id": None, "elected_at": None,         "annotation": None, "discussion_url": None},
+    {"id": 104, "title": "Пикник на обочине",     "author_id": 13,  "added_by_member_id": 4, "added_at": "2025-09-01", "status": "to_read", "country": None, "elected_poll_id": None, "elected_at": None,         "annotation": None, "discussion_url": None},
+    {"id": 105, "title": "Дюна",                  "author_id": 146, "added_by_member_id": 4, "added_at": "2026-02-28", "status": "to_read", "country": None, "elected_poll_id": None, "elected_at": None,         "annotation": None, "discussion_url": None},
+]
+
+# Набор только с прочитанными/удалёнными — to_read нет совсем
+only_read_books = [
+    {"id": 201, "title": "Крутой маршрут", "author_id": 57,  "added_by_member_id": 1, "added_at": "2022-03-19", "status": "read",    "country": None, "elected_poll_id": None, "elected_at": "2022-03-19", "annotation": None, "discussion_url": None},
+    {"id": 202, "title": "Vita Nostra",    "author_id": 79,  "added_by_member_id": 2, "added_at": "2022-04-09", "status": "read",    "country": None, "elected_poll_id": None, "elected_at": "2022-04-10", "annotation": None, "discussion_url": None},
+    {"id": 203, "title": "Чемодан",        "author_id": 118, "added_by_member_id": 3, "added_at": "2022-04-10", "status": "removed", "country": None, "elected_poll_id": None, "elected_at": None,         "annotation": None, "discussion_url": None},
+]
+
+# Пустой список книг
+empty_books: list = []
+
+
 # --- Вспомогательные функции для тестов ---
 
 def get_author_by_id(author_id: int) -> dict | None:

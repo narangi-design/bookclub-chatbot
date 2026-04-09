@@ -1,9 +1,11 @@
 import os
+import random
 import logging
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, CallbackQueryHandler, filters
 from mock_db import author_name_exists, get_book_by_title, get_books_by_status
+import api_client
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -63,8 +65,7 @@ async def removeBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     else:
         await update.message.reply_text(f'Книга "{title}" не найдена в списке.')
 
-async def createPoll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    books = get_books_by_status("to_read")
+async def _send_poll(update: Update, context: ContextTypes.DEFAULT_TYPE, books: list) -> None:
     if not books:
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -78,8 +79,21 @@ async def createPoll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         question=f'Выбираем следующую книгу, {update.effective_chat.title}!',
         options=options,
         is_anonymous=False,
-        allows_multiple_answers=False,
+        allows_multiple_answers=True,
+        open_period=86400,
     )
+
+
+async def createPollTest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    books = get_books_by_status("to_read")
+    if len(books) > 4:
+        books = random.sample(books, 4)
+    await _send_poll(update, context, books)
+
+
+async def createPoll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    books = api_client.get_poll_candidates(n=12)
+    await _send_poll(update, context, books)
 
 
 if __name__ == '__main__':
@@ -104,5 +118,6 @@ if __name__ == '__main__':
     app.add_handler(addBook_handler)
     app.add_handler(CommandHandler('remove', removeBook))
     app.add_handler(CommandHandler('create_poll', createPoll))
+    app.add_handler(CommandHandler('create_poll_test', createPollTest))
 
     app.run_polling()
