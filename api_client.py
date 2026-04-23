@@ -17,3 +17,23 @@ def get_poll_candidates(n: int = 4) -> list:
     )
     response.raise_for_status()
     return response.json()
+
+
+def add_book(title: str, author_name: str, telegram_id: int) -> dict:
+    response = httpx.post(
+        f'{_BOT_URL}/books',
+        json={'title': title, 'author_name': author_name, 'telegram_id': telegram_id},
+        headers=_HEADERS,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def remove_book(title: str) -> bool:
+    response = httpx.delete(
+        f'{_BOT_URL}/books',
+        params={'title': title},
+        headers=_HEADERS,
+    )
+    response.raise_for_status()
+    return response.json().get('found', False)

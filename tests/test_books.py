@@ -2,133 +2,166 @@ import pytest
 from unittest.mock import patch
 
 from tests.conftest import make_update, make_context
-from tests.fixtures import get_books_by_status
 
 
-# ---------------------------------------------------------------------------
-# /start
-# ---------------------------------------------------------------------------
+def make_add_update(first_name='Алёна'):
+    update = make_update()
+    update.effective_user.first_name = first_name
+    update.effective_user.username = 'alyona_reads'
+    return update
+
+
+def make_add_context(text: str):
+    context = make_context()
+    context.args = text.split() if text else []
+    return context
 
 @pytest.mark.asyncio
 async def test_start_sends_greeting():
-    """Бот отвечает на /start приветственным сообщением."""
     from bot import start
 
     update = make_update()
     context = make_context()
-
     await start(update, context)
 
     context.bot.send_message.assert_called_once()
-    args, kwargs = context.bot.send_message.call_args
-    assert "привет" in kwargs.get("text", "").lower() or "привет" in (args[1] if len(args) > 1 else "").lower()
-
-
-# ---------------------------------------------------------------------------
-# /add — добавление книги
-# ---------------------------------------------------------------------------
+    _, kwargs = context.bot.send_message.call_args
+    assert 'привет' in kwargs.get('text', '').lower()
 
 @pytest.mark.asyncio
-async def test_add_book_starts_conversation():
-    """/add запрашивает название книги."""
+async def test_add_no_args_shows_help():
+    """/add без аргументов показывает подсказку."""
+    from handlers.books import addBook, HELP_TEXT
+
+    update = make_add_update()
+    await addBook(update, make_add_context(''))
+
+    update.message.reply_text.assert_called_once_with(HELP_TEXT)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('text', [
+    'Просто текст без разделителя',
+    'Слово-с-дефисом-в-одном-месте',
+    'Автор',
+])
+async def test_add_invalid_format_shows_help(text):
+    """Текст без разделителя показывает подсказку."""
+    from handlers.books import addBook, HELP_TEXT
+
+    update = make_add_update()
+    await addBook(update, make_add_context(text))
+
+    update.message.reply_text.assert_called_once_with(HELP_TEXT)
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('text,expected_author,expected_title', [
+    ('Михаил Булгаков — Мастер и Маргарита',       'Михаил Булгаков',               'Мастер и Маргарита'),
+    ('Михаил Булгаков – Мастер и Маргарита',        'Михаил Булгаков',               'Мастер и Маргарита'),
+    ('Михаил Булгаков - Мастер и Маргарита',        'Михаил Булгаков',               'Мастер и Маргарита'),
+    ('Аркадий и Борис Стругацкие — Пикник на обочине', 'Аркадий и Борис Стругацкие', 'Пикник на обочине'),
+    ('Булгаков Михаил — Мастер и Маргарита',        'Булгаков Михаил',               'Мастер и Маргарита'),
+])
+async def test_add_valid_format_calls_api(text, expected_author, expected_title):
+    """Верный формат вызывает api_client.add_book с правильными аргументами."""
     from handlers.books import addBook
 
+    update = make_add_update()
+    with patch('handlers.books.api_client.add_book') as mock_add:
+        await addBook(update, make_add_context(text))
+
+    mock_add.assert_called_once_with(
+        title=expected_title,
+        author_name=expected_author,
+        telegram_id=update.effective_user.id,
+    )
+
+@pytest.mark.asyncio
+async def test_add_success_message_contains_user_name():
+    """Сообщение об успехе содержит имя пользователя."""
+    from handlers.books import addBook
+
+    update = make_add_update(first_name='Алёна')
+    with patch('handlers.books.api_client.add_book'):
+        await addBook(update, make_add_context('Михаил Булгаков — Мастер и Маргарита'))
+
+    text = update.message.reply_text.call_args[0][0]
+    assert 'Алёна' in text
+
+
+@pytest.mark.asyncio
+async def test_add_success_message_contains_title_and_author():
+    """Сообщение об успехе содержит название и автора."""
+    from handlers.books import addBook
+
+    update = make_add_update()
+    with patch('handlers.books.api_client.add_book'):
+        await addBook(update, make_add_context('Михаил Булгаков — Мастер и Маргарита'))
+
+    text = update.message.reply_text.call_args[0][0]
+    assert 'Мастер и Маргарита' in text
+    assert 'Михаил Булгаков' in text
+
+
+@pytest.mark.asyncio
+async def test_add_api_error_shows_error_message():
+    """Ошибка API показывает сообщение об ошибке."""
+    from handlers.books import addBook
+
+    update = make_add_update()
+    with patch('handlers.books.api_client.add_book', side_effect=Exception('API error')):
+        await addBook(update, make_add_context('Михаил Булгаков — Мастер и Маргарита'))
+
+    text = update.message.reply_text.call_args[0][0]
+    assert 'не удалось' in text.lower()
+
+@pytest.mark.asyncio
+async def test_remove_no_args_shows_hint():
+    """/remove без аргументов показывает подсказку."""
+    from handlers.books import removeBook
+
     update = make_update()
-    context = make_context()
+    context = make_add_context('')
+    await removeBook(update, context)
 
-    await addBook(update, context)
-
-    update.message.reply_text.assert_called_once()
-    call_text = update.message.reply_text.call_args[0][0]
-    assert "название" in call_text.lower()
+    text = update.message.reply_text.call_args[0][0]
+    assert '/remove' in text
 
 
 @pytest.mark.asyncio
-async def test_add_book_title_saves_to_user_data():
-    """После ввода названия оно сохраняется в context.user_data['title']."""
-    from handlers.books import addBook_title
-
-    update = make_update(text="Дюна")
-    context = make_context()
-
-    await addBook_title(update, context)
-
-    assert context.user_data["title"] == "Дюна"
-
-
-@pytest.mark.asyncio
-async def test_add_book_title_asks_for_author():
-    """После ввода названия бот спрашивает автора."""
-    from handlers.books import addBook_title
-
-    update = make_update(text="Пикник на обочине")
-    context = make_context()
-
-    await addBook_title(update, context)
-
-    call_text = update.message.reply_text.call_args[0][0]
-    assert "автор" in call_text.lower()
-
-
-@pytest.mark.asyncio
-async def test_add_book_author_known_confirms():
-    """Если автор есть в базе — бот подтверждает добавление."""
-    from handlers.books import addBook_author
-
-    update = make_update(text="Аркадий и Борис Стругацкие")
-    context = make_context(user_data={"title": "Улитка на склоне"})
-
-    with patch("handlers.books.author_name_exists", return_value=True):
-        await addBook_author(update, context)
-
-    call_text = update.message.reply_text.call_args[0][0]
-    assert "улитка на склоне" in call_text.lower()
-
-
-@pytest.mark.asyncio
-async def test_add_book_author_unknown_warns():
-    """Если автор не найден — бот предупреждает, но не блокирует."""
-    from handlers.books import addBook_author
-
-    update = make_update(text="Несуществующий Автор")
-    context = make_context(user_data={"title": "Неизвестная книга"})
-
-    with patch("handlers.books.author_name_exists", return_value=False):
-        await addBook_author(update, context)
-
-    call_text = update.message.reply_text.call_args[0][0]
-    assert call_text
-
-
-# ---------------------------------------------------------------------------
-# /remove — удаление книги
-# ---------------------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_remove_book_confirms_removal():
-    """/remove с существующей книгой — бот подтверждает удаление."""
+async def test_remove_found_confirms():
+    """/remove с существующей книгой подтверждает удаление."""
     from handlers.books import removeBook
 
-    existing_book = get_books_by_status("to_read")[0]
-    update = make_update(text=existing_book["title"])
-    context = make_context()
+    update = make_update()
+    with patch('handlers.books.api_client.remove_book', return_value=True):
+        await removeBook(update, make_add_context('Мастер и Маргарита'))
 
-    with patch("handlers.books.get_book_by_title", return_value=existing_book):
-        await removeBook(update, context)
-
-    update.message.reply_text.assert_called_once()
+    text = update.message.reply_text.call_args[0][0]
+    assert 'удален' in text.lower()
 
 
 @pytest.mark.asyncio
-async def test_remove_book_not_found():
-    """/remove с несуществующей книгой — бот сообщает, что не нашёл."""
+async def test_remove_not_found_notifies():
+    """/remove с несуществующей книгой сообщает, что не нашлось."""
     from handlers.books import removeBook
 
-    update = make_update(text="Нет такой книги")
-    context = make_context()
+    update = make_update()
+    with patch('handlers.books.api_client.remove_book', return_value=False):
+        await removeBook(update, make_add_context('Нет такой книги'))
 
-    with patch("handlers.books.get_book_by_title", return_value=None):
-        await removeBook(update, context)
+    text = update.message.reply_text.call_args[0][0]
+    assert 'не найден' in text.lower()
 
-    call_text = update.message.reply_text.call_args[0][0]
-    assert call_text
+
+@pytest.mark.asyncio
+async def test_remove_api_error_shows_error_message():
+    """Ошибка API при удалении показывает сообщение об ошибке."""
+    from handlers.books import removeBook
+
+    update = make_update()
+    with patch('handlers.books.api_client.remove_book', side_effect=Exception('API error')):
+        await removeBook(update, make_add_context('Мастер и Маргарита'))
+
+    text = update.message.reply_text.call_args[0][0]
+    assert 'не удалось' in text.lower()

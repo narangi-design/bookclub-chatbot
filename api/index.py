@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from bot import start, hello, myid
-from handlers.books import removeBook
+from handlers.books import addBook, removeBook
 from handlers.polls import createPoll, createPollTest
 
 
@@ -20,6 +20,7 @@ def _build_app() -> Application:
     tg_app.add_handler(CommandHandler('start', start))
     tg_app.add_handler(CommandHandler('hello', hello))
     tg_app.add_handler(CommandHandler('myid', myid))
+    tg_app.add_handler(CommandHandler('add', addBook))
     tg_app.add_handler(CommandHandler('remove', removeBook))
     tg_app.add_handler(CommandHandler('create_poll', createPoll))
     tg_app.add_handler(CommandHandler('create_poll_test', createPollTest))
