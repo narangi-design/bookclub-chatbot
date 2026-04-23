@@ -115,6 +115,37 @@ async def test_add_api_error_shows_error_message():
     text = update.message.reply_text.call_args[0][0]
     assert 'не удалось' in text.lower()
 
+
+# ---------------------------------------------------------------------------
+# /add — дубликат книги
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_add_duplicate_book_shows_existing_title():
+    """Если книга уже есть в базе — бот сообщает об этом с точным названием из БД."""
+    from handlers.books import addBook
+
+    update = make_add_update()
+    with patch('handlers.books.api_client.add_book', return_value={'exists': True, 'existing_title': 'Мастер и Маргарита'}):
+        await addBook(update, make_add_context('Михаил Булгаков — Мастер и Маргарита'))
+
+    text = update.message.reply_text.call_args[0][0]
+    assert 'Мастер и Маргарита' in text
+
+
+@pytest.mark.asyncio
+async def test_add_duplicate_book_does_not_send_success():
+    """При дубликате не должно быть сообщения об успешном добавлении."""
+    from handlers.books import addBook
+
+    update = make_add_update()
+    with patch('handlers.books.api_client.add_book', return_value={'exists': True, 'existing_title': 'Мастер и Маргарита'}):
+        await addBook(update, make_add_context('Михаил Булгаков — Мастер и Маргарита'))
+
+    text = update.message.reply_text.call_args[0][0]
+    assert 'в списке, ' not in text  # нет приветствия из success-сообщения
+
+
 @pytest.mark.asyncio
 async def test_remove_no_args_shows_hint():
     """/remove без аргументов показывает подсказку."""

@@ -27,12 +27,22 @@ async def addBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     author_name = match.group(1).strip()
     title = match.group(2).strip()
-    telegram_id = update.effective_user.id
+    tg_user = update.effective_user
 
     try:
-        api_client.add_book(title=title, author_name=author_name, telegram_id=telegram_id)
-        user = update.effective_user
-        name = user.first_name or user.username or 'друг'
+        result = api_client.add_book(
+            title=title,
+            author_name=author_name,
+            telegram_id=tg_user.id,
+            telegram_username=tg_user.username,
+            telegram_fullname=tg_user.full_name,
+        )
+        if result.get('exists'):
+            await update.message.reply_text(
+                f'Похоже, такая книга уже есть в списке: «{result["existing_title"]}».'
+            )
+            return
+        name = tg_user.first_name or tg_user.username or 'друг'
         await update.message.reply_text(
             f'Книга теперь в списке, {name}!\n'
             f'Название: «{title}»\n'

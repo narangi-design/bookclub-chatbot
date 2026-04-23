@@ -1,3 +1,4 @@
+from datetime import date
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -17,7 +18,7 @@ async def _send_poll(update: Update, context: ContextTypes.DEFAULT_TYPE, candida
         f'«{c["title"]}», {c["author_name"]} — {c["member_display_name"]}'
         for c in candidates
     ]
-    await context.bot.send_poll(
+    msg = await context.bot.send_poll(
         chat_id=update.effective_chat.id,
         question=f'Выбираем следующую книгу, {update.effective_chat.title}!',
         options=options,
@@ -25,6 +26,7 @@ async def _send_poll(update: Update, context: ContextTypes.DEFAULT_TYPE, candida
         allows_multiple_answers=True,
         open_period=86400,
     )
+    return msg, candidates
 
 
 async def createPollTest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -34,4 +36,42 @@ async def createPollTest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def createPoll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     candidates = api_client.get_poll_candidates(n=12)
-    await _send_poll(update, context, candidates)
+    result = await _send_poll(update, context, candidates)
+    if result is None:
+        return
+    msg, candidates = result
+    try:
+        api_client.create_poll(
+            stage=1,
+            date=date.today().isoformat(),
+            telegram_poll_id=msg.poll.id,
+            book_ids=[c['id'] for c in candidates],
+        )
+    except Exception:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='⚠️ Опрос создан, но не удалось сохранить его в базу. Запиши ID опроса вручную.',
+        )
+
+
+async def pollResults(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    reply = update.message.reply_to_message
+    if not reply or not reply.poll:
+        await update.message.reply_text('Реплайни на сообщение с опросом.')
+        return
+
+    poll = reply.poll
+    options = [
+        {'option_index': i, 'votes_count': opt.voter_count}
+        for i, opt in enumerate(poll.options)
+    ]
+
+    try:
+        result = api_client.save_poll_results(
+            telegram_poll_id=poll.id,
+            total_voters=poll.total_voter_count,
+            options=options,
+        )
+        await update.message.reply_text('Результаты сохранены!')
+    except Exception as e:
+        await update.message.reply_text(f'Не удалось сохранить результаты. Попробуй ещё раз.')

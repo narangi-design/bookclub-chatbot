@@ -19,10 +19,46 @@ def get_poll_candidates(n: int = 4) -> list:
     return response.json()
 
 
-def add_book(title: str, author_name: str, telegram_id: int) -> dict:
+def add_book(title: str, author_name: str, telegram_id: int,
+             telegram_username: str | None = None, telegram_fullname: str | None = None) -> dict:
     response = httpx.post(
         f'{_BOT_URL}/books',
-        json={'title': title, 'author_name': author_name, 'telegram_id': telegram_id},
+        json={
+            'title': title,
+            'author_name': author_name,
+            'telegram_id': telegram_id,
+            'telegram_username': telegram_username,
+            'telegram_fullname': telegram_fullname,
+        },
+        headers=_HEADERS,
+    )
+    response.raise_for_status()
+    return response.json()  # {'ok': True} или {'exists': True, 'existing_title': '...'}
+
+
+def create_poll(stage: int, date: str, telegram_poll_id: str, book_ids: list[int]) -> dict:
+    response = httpx.post(
+        f'{_BOT_URL}/polls',
+        json={
+            'stage': stage,
+            'date': date,
+            'telegram_poll_id': telegram_poll_id,
+            'book_ids': book_ids,
+        },
+        headers=_HEADERS,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def save_poll_results(telegram_poll_id: str, total_voters: int, options: list[dict]) -> dict:
+    response = httpx.post(
+        f'{_BOT_URL}/polls/results',
+        json={
+            'telegram_poll_id': telegram_poll_id,
+            'total_voters': total_voters,
+            'options': options,
+        },
         headers=_HEADERS,
     )
     response.raise_for_status()
