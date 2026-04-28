@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 import api_client
 
 HELP_TEXT = (
-    'Форматы, чтобы добавить книгу:\n'
+    'Пиши /add, пробел и что-то из этого:\n'
     '🔸Имя Фамилия — Название книги\n'
     '🔸Имя Фамилия, .., Имя Фамилия (и т.д.) — Название книги\n'
     '🔸Имя и Имя Фамилия — Название книги\n'
@@ -39,7 +39,7 @@ async def addBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         if result.get('exists'):
             await update.message.reply_text(
-                f'Похоже, такая книга уже есть в списке: «{result["existing_title"]}».'
+                f'Похоже, такая книга «{result["existing_title"]}» уже есть в списке.'
             )
             return
         name = tg_user.first_name or tg_user.username or 'друг'

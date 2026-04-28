@@ -18,7 +18,7 @@ load_dotenv()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Привет, я ассистент книжного клуба! Я помогаю со списком книг и выбором книги для чтения.'
+        text='Привет, я ваш камень! Я помогаю со списком книг и выбором книги для чтения.'
     )
 
 async def hello(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -35,8 +35,8 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('hello', hello))
     app.add_handler(CommandHandler('add', addBook))
-    app.add_handler(CommandHandler('remove', removeBook))
+#    app.add_handler(CommandHandler('remove', removeBook))
     app.add_handler(CommandHandler('create_poll', createPoll))
-    app.add_handler(CommandHandler('create_poll_test', createPollTest))
+#    app.add_handler(CommandHandler('create_poll_test', createPollTest))
 
     app.run_polling()
