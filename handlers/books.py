@@ -39,7 +39,7 @@ async def addBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         if result.get('exists'):
             await update.message.reply_text(
-                f'Похоже, такая книга «{result["existing_title"]}» уже есть в списке.'
+                f'Похоже, книга «{result["existing_title"]}» уже есть в списке.'
             )
             return
         name = tg_user.first_name or tg_user.username or 'друг'

@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from bot import start, hello, myid
+from handlers.common import start, hello, myid
 from handlers.books import addBook, removeBook
 from handlers.polls import createPoll, createPollTest, pollResults
 

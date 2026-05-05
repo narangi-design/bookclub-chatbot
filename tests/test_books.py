@@ -18,7 +18,7 @@ def make_add_context(text: str):
 
 @pytest.mark.asyncio
 async def test_start_sends_greeting():
-    from bot import start
+    from handlers.common import start
 
     update = make_update()
     context = make_context()

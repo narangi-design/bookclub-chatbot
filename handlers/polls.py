@@ -72,6 +72,17 @@ async def pollResults(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             total_voters=poll.total_voter_count,
             options=options,
         )
-        await update.message.reply_text('Результаты сохранены!')
-    except Exception as e:
-        await update.message.reply_text(f'Не удалось сохранить результаты. Попробуй ещё раз.')
+        winner = result.get('winner')
+        total = result.get('total_voters', poll.total_voter_count)
+        if winner:
+            username = f'@{winner["added_by_username"]}' if winner['added_by_username'] else 'Участник'
+            await update.message.reply_text(
+                f'Что мы читаем дальше:\n'
+                f'«{winner["title"]}», {winner["author"]}\n\n'
+                f'{username}, за твою книгу проголосовали {winner["votes"]} человек!\n'
+                f'Всего в голосовании приняли участие {total} человек.'
+            )
+        else:
+            await update.message.reply_text('Результаты сохранены!')
+    except Exception:
+        await update.message.reply_text('Не удалось сохранить результаты. Может, попробовать ещё раз? Или позовите админа!')
