@@ -62,7 +62,9 @@ async def removeBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     query = ' '.join(context.args).strip() if context.args else ''
 
     if not query:
-        await update.message.reply_text('Укажи название: /remove Название книги')
+        await update.message.reply_text(
+            'Напиши /remove и название книги, тогда я смогу убрать книгу из очереди.'
+        )
         return
 
     try:
@@ -72,7 +74,21 @@ async def removeBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         return
 
     if not matches:
-        await update.message.reply_text('Не нашёл ничего похожего в списке.')
+        try:
+            my_books = api_client.get_member_books(update.effective_user.id)
+        except Exception:
+            my_books = []
+
+        if my_books:
+            book_list = '\n'.join(_book_label(b) for b in my_books)
+            text = (
+                'Кажется, в списке нет такой книги.\n'
+                'На всякий случай вот список книг, предложенных тобой:\n'
+                f'{book_list}'
+            )
+        else:
+            text = 'Кажется, в списке нет такой книги.'
+        await update.message.reply_text(text)
         return
 
     buttons = [
@@ -83,6 +99,34 @@ async def removeBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     text = 'Выбери книгу:' if len(matches) > 1 else 'Нашёл книгу:'
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+async def myBooks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        books = api_client.get_member_books(update.effective_user.id)
+    except Exception:
+        await update.message.reply_text('Не удалось получить список книг. Попробуй ещё раз.')
+        return
+
+    ps = 'P.S. Хочешь ещё что-нибудь добавить? Пиши в чат /add, там сказано как.'
+
+    if not books:
+        await update.message.reply_text(
+            'Кажется, в списке клуба от тебя ничего нет.\n\n'
+            'P.S. Может, добавим? Напиши в чат /add, там сказано как.'
+        )
+        return
+
+    if len(books) == 1:
+        await update.message.reply_text(
+            f'От тебя только одна книга в предложке: {_book_label(books[0])}.\n\n{ps}'
+        )
+        return
+
+    book_list = '\n'.join(_book_label(b) for b in books)
+    await update.message.reply_text(
+        f'Вот список книг, предложенных тобой для чтения:\n{book_list}\n\n{ps}'
+    )
 
 
 async def removeBookCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
