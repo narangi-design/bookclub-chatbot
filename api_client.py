@@ -65,9 +65,13 @@ def save_poll_results(telegram_poll_id: str, total_voters: int, options: list[di
     return response.json()
 
 
-def get_member_books(telegram_id: int) -> list[dict]:
+def get_member_books(telegram_id: int, telegram_username: str | None = None) -> list[dict]:
+    params = {}
+    if telegram_username:
+        params['telegram_username'] = telegram_username
     response = httpx.get(
         f'{_BOT_URL}/members/{telegram_id}/books',
+        params=params,
         headers=_HEADERS,
     )
     response.raise_for_status()

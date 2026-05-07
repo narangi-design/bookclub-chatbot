@@ -75,7 +75,7 @@ async def removeBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     if not matches:
         try:
-            my_books = api_client.get_member_books(update.effective_user.id)
+            my_books = api_client.get_member_books(update.effective_user.id, update.effective_user.username)
         except Exception:
             my_books = []
 
@@ -103,7 +103,7 @@ async def removeBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def myBooks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
-        books = api_client.get_member_books(update.effective_user.id)
+        books = api_client.get_member_books(update.effective_user.id, update.effective_user.username)
     except Exception:
         await update.message.reply_text('Не удалось получить список книг. Попробуй ещё раз.')
         return
