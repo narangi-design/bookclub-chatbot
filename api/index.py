@@ -10,14 +10,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from handlers.common import start, hello, myid
+from handlers.common import helpCommand, hello, myid
 from handlers.books import addBook, removeBook, removeBookCallback, myBooks
 from handlers.polls import createPoll, createPollTest, pollResults
 
 
 def _build_app() -> Application:
     tg_app = Application.builder().token(os.getenv('BOT_TOKEN', '')).build()
-    tg_app.add_handler(CommandHandler('start', start))
+    tg_app.add_handler(CommandHandler('help', helpCommand))
     tg_app.add_handler(CommandHandler('hello', hello))
     tg_app.add_handler(CommandHandler('myid', myid))
     tg_app.add_handler(CommandHandler('add', addBook))
