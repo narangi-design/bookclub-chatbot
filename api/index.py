@@ -5,13 +5,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from fastapi import FastAPI, Request, Response
 from mangum import Mangum
 from telegram import Update
-from telegram.ext import Application, CommandHandler
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler
 from dotenv import load_dotenv
 
 load_dotenv()
 
 from handlers.common import start, hello, myid
-from handlers.books import addBook, removeBook
+from handlers.books import addBook, removeBook, removeBookCallback
 from handlers.polls import createPoll, createPollTest, pollResults
 
 
@@ -22,6 +22,7 @@ def _build_app() -> Application:
     tg_app.add_handler(CommandHandler('myid', myid))
     tg_app.add_handler(CommandHandler('add', addBook))
     tg_app.add_handler(CommandHandler('remove', removeBook))
+    tg_app.add_handler(CallbackQueryHandler(removeBookCallback, pattern=r'^remove:'))
     tg_app.add_handler(CommandHandler('create_poll', createPoll))
     tg_app.add_handler(CommandHandler('create_poll_test', createPollTest))
     tg_app.add_handler(CommandHandler('results', pollResults))

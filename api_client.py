@@ -65,10 +65,19 @@ def save_poll_results(telegram_poll_id: str, total_voters: int, options: list[di
     return response.json()
 
 
-def remove_book(title: str) -> bool:
+def search_books_to_remove(q: str) -> list[dict]:
+    response = httpx.get(
+        f'{_BOT_URL}/books/search',
+        params={'q': q},
+        headers=_HEADERS,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def remove_book(book_id: int) -> bool:
     response = httpx.delete(
-        f'{_BOT_URL}/books',
-        params={'title': title},
+        f'{_BOT_URL}/books/{book_id}',
         headers=_HEADERS,
     )
     response.raise_for_status()
