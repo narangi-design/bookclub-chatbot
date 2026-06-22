@@ -167,25 +167,31 @@ async def _send_cover_options(update: Update, book_id: int) -> None:
     if not photos:
         return
 
-    try:
-        if len(photos) == 1:
-            img, c = photos[0]
-            buttons = InlineKeyboardMarkup([[
-                InlineKeyboardButton('Берём', callback_data=f'{c["source"]}:{book_id}:{c["ref_id"]}'),
-                skip_btn,
-            ]])
+    if len(photos) == 1:
+        img, c = photos[0]
+        buttons = InlineKeyboardMarkup([[
+            InlineKeyboardButton('Берём', callback_data=f'{c["source"]}:{book_id}:{c["ref_id"]}'),
+            skip_btn,
+        ]])
+        try:
             await update.message.reply_photo(photo=img, reply_markup=buttons)
-        else:
-            media = [InputMediaPhoto(media=img, caption=str(i + 1)) for i, (img, _) in enumerate(photos)]
+        except Exception:
+            return
+    else:
+        media = [InputMediaPhoto(media=img, caption=str(i + 1)) for i, (img, _) in enumerate(photos)]
+        try:
             await update.message.reply_media_group(media=media)
-            number_btns = [
-                InlineKeyboardButton(str(i + 1), callback_data=f'{c["source"]}:{book_id}:{c["ref_id"]}')
-                for i, (_, c) in enumerate(photos)
-            ]
-            buttons = InlineKeyboardMarkup([number_btns + [skip_btn]])
+        except Exception:
+            return
+        number_btns = [
+            InlineKeyboardButton(str(i + 1), callback_data=f'{c["source"]}:{book_id}:{c["ref_id"]}')
+            for i, (_, c) in enumerate(photos)
+        ]
+        buttons = InlineKeyboardMarkup([number_btns + [skip_btn]])
+        try:
             await update.message.reply_text('Выбери обложку:', reply_markup=buttons)
-    except Exception:
-        return
+        except Exception:
+            return
 
 
 async def coverCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
