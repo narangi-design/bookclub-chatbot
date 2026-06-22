@@ -202,7 +202,13 @@ async def coverCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     source = parts[0]
 
     if source == COVER_SKIP:
-        await query.edit_message_text('Без обложки, окей.')
+        try:
+            await query.edit_message_text('Без обложки, окей.')
+        except Exception:
+            try:
+                await query.edit_message_caption('Без обложки, окей.')
+            except Exception:
+                await query.message.reply_text('Без обложки, окей.')
         return
 
     _, book_id_str, ref_id = parts
@@ -211,11 +217,20 @@ async def coverCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await query.edit_message_text('Не удалось определить обложку.')
         return
 
+    async def _reply(text: str) -> None:
+        try:
+            await query.edit_message_text(text)
+        except Exception:
+            try:
+                await query.edit_message_caption(text)
+            except Exception:
+                await query.message.reply_text(text)
+
     try:
         api_client.save_cover_url(int(book_id_str), cover_url)
-        await query.edit_message_text('Обложка сохранена.')
+        await _reply('Обложка сохранена.')
     except Exception:
-        await query.edit_message_text('Не удалось сохранить обложку. Попробуй ещё раз.')
+        await _reply('Не удалось сохранить обложку. Попробуй ещё раз.')
 
 
 async def removeBookCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
