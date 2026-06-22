@@ -20,7 +20,7 @@ COVER_SKIP = 'cover_skip'
 
 def _url_from_callback(source: str, ref_id: str) -> str | None:
     if source == COVER_GOOGLE:
-        return f'http://books.google.com/books/content?id={ref_id}&printsec=frontcover&img=1&zoom=0&source=gbs_api'
+        return f'https://books.google.com/books/content?id={ref_id}&printsec=frontcover&img=1&zoom=5&source=gbs_api'
     if source == COVER_LITRES:
         return f'https://www.litres.ru/pub/c/cover/{ref_id}.jpg'
     return None
