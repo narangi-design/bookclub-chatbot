@@ -71,7 +71,7 @@ async def addBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f'Автор: {author_name}\n\n'
             f'Удачи на голосовании. 😈'
         )
-        await _send_cover_options(update, book_id)
+        await _send_cover_options(update.message, book_id)
     except Exception:
         await update.message.reply_text('Не удалось добавить книгу. Попробуй ещё раз.')
 
@@ -152,7 +152,7 @@ async def myBooks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-async def _send_cover_options(update: Update, book_id: int) -> None:
+async def _send_cover_options(message, book_id: int) -> None:
     try:
         found = api_client.get_book_covers(book_id)
     except Exception:
@@ -174,13 +174,13 @@ async def _send_cover_options(update: Update, book_id: int) -> None:
             skip_btn,
         ]])
         try:
-            await update.message.reply_photo(photo=img, reply_markup=buttons)
+            await message.reply_photo(photo=img, reply_markup=buttons)
         except Exception:
             return
     else:
         media = [InputMediaPhoto(media=img, caption=str(i + 1)) for i, (img, _) in enumerate(photos)]
         try:
-            await update.message.reply_media_group(media=media)
+            await message.reply_media_group(media=media)
         except Exception:
             pass
         number_btns = [
@@ -189,9 +189,38 @@ async def _send_cover_options(update: Update, book_id: int) -> None:
         ]
         buttons = InlineKeyboardMarkup([number_btns + [skip_btn]])
         try:
-            await update.message.reply_text('Выбери обложку:', reply_markup=buttons)
+            await message.reply_text('Выбери обложку:', reply_markup=buttons)
         except Exception:
             return
+
+
+PICK_COVER = 'pick_cover'
+
+
+async def addCover(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        books = api_client.get_books_without_cover()
+    except Exception:
+        await update.message.reply_text('Не удалось получить список книг. Попробуй ещё раз.')
+        return
+
+    if not books:
+        await update.message.reply_text('У всех книг уже есть обложки.')
+        return
+
+    buttons = [
+        [InlineKeyboardButton(_book_label(b), callback_data=f'{PICK_COVER}:{b["id"]}')]
+        for b in books
+    ]
+    await update.message.reply_text('Выбери книгу для добавления обложки:', reply_markup=InlineKeyboardMarkup(buttons))
+
+
+async def pickCoverCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    book_id = int(query.data.split(':', 1)[1])
+    await query.edit_message_text('Ищу обложки...')
+    await _send_cover_options(query.message, book_id)
 
 
 async def coverCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

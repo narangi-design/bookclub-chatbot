@@ -88,6 +88,12 @@ def search_books_to_remove(q: str) -> list[dict]:
     return response.json()
 
 
+def get_books_without_cover() -> list[dict]:
+    response = httpx.get(f'{_BOT_URL}/books/without-cover', headers=_HEADERS)
+    response.raise_for_status()
+    return response.json()
+
+
 def get_book_covers(book_id: int) -> list[dict]:
     response = httpx.get(
         f'{_BOT_URL}/books/{book_id}/covers',
