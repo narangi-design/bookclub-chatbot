@@ -196,6 +196,58 @@ async def _send_cover_options(message, book_id: int) -> bool:
 
 
 PICK_COVER = 'pick_cover'
+PICK_DISCUSSION = 'pick_disc'
+
+
+async def addDiscussion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    reply = update.message.reply_to_message
+    if not reply:
+        await update.message.reply_text('Реплайни на сообщение с записью заседания.')
+        return
+
+    chat_id = update.effective_chat.id
+    short_id = str(chat_id)[4:]
+    discussion_url = f'https://t.me/c/{short_id}/{reply.message_id}'
+
+    try:
+        books = api_client.get_recently_read(n=5)
+    except Exception:
+        await update.message.reply_text('Не удалось получить список книг. Попробуй ещё раз.')
+        return
+
+    if not books:
+        await update.message.reply_text('Нет недавно прочитанных книг без записи заседания.')
+        return
+
+    buttons = [
+        [InlineKeyboardButton(_book_label(b), callback_data=f'{PICK_DISCUSSION}:{b["id"]}')]
+        for b in books
+    ]
+    buttons.append([InlineKeyboardButton('❌ Отмена', callback_data=f'{PICK_DISCUSSION}:cancel')])
+    await update.message.reply_text(
+        f'К какой книге привязать запись?\n{discussion_url}',
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
+
+
+async def pickDiscussionCallback(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    payload = query.data.split(':', 1)[1]
+    if payload == 'cancel':
+        await query.edit_message_text('Отменено.')
+        return
+
+    lines = query.message.text.splitlines()
+    discussion_url = lines[-1].strip()
+    book_id = int(payload)
+
+    try:
+        api_client.save_discussion_url(book_id, discussion_url)
+        await query.edit_message_text('Запись заседания сохранена.')
+    except Exception:
+        await query.edit_message_text('Не удалось сохранить. Попробуй ещё раз.')
 
 
 async def addCover(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from handlers.common import helpCommand, hello, myid
-from handlers.books import addBook, removeBook, removeBookCallback, myBooks, coverCallback, addCover, pickCoverCallback
+from handlers.books import addBook, removeBook, removeBookCallback, myBooks, coverCallback, addCover, pickCoverCallback, addDiscussion, pickDiscussionCallback
 from handlers.polls import createPoll, createPollTest, pollResults
 
 
@@ -23,6 +23,8 @@ def _build_app() -> Application:
     tg_app.add_handler(CommandHandler('add', addBook))
     tg_app.add_handler(CommandHandler('remove', removeBook))
     tg_app.add_handler(CallbackQueryHandler(removeBookCallback, pattern=r'^remove:'))
+    tg_app.add_handler(CommandHandler('discussion', addDiscussion))
+    tg_app.add_handler(CallbackQueryHandler(pickDiscussionCallback, pattern=r'^pick_disc:'))
     tg_app.add_handler(CommandHandler('cover', addCover))
     tg_app.add_handler(CallbackQueryHandler(pickCoverCallback, pattern=r'^pick_cover:'))
     tg_app.add_handler(CallbackQueryHandler(coverCallback, pattern=r'^cover_'))

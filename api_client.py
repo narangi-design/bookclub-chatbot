@@ -88,6 +88,21 @@ def search_books_to_remove(q: str) -> list[dict]:
     return response.json()
 
 
+def get_recently_read(n: int = 5) -> list[dict]:
+    response = httpx.get(f'{_BOT_URL}/books/recently-read', params={'n': n}, headers=_HEADERS)
+    response.raise_for_status()
+    return response.json()
+
+
+def save_discussion_url(book_id: int, discussion_url: str) -> None:
+    response = httpx.put(
+        f'{_BOT_URL}/books/{book_id}/discussion_url',
+        json={'discussion_url': discussion_url},
+        headers=_HEADERS,
+    )
+    response.raise_for_status()
+
+
 def get_books_without_cover() -> list[dict]:
     response = httpx.get(f'{_BOT_URL}/books/without-cover', headers=_HEADERS)
     response.raise_for_status()
