@@ -20,7 +20,7 @@ COVER_SKIP = 'cover_skip'
 
 def _url_from_callback(source: str, ref_id: str) -> str | None:
     if source == COVER_GOOGLE:
-        return f'https://books.google.com/books/content?id={ref_id}&printsec=frontcover&img=1&zoom=5&source=gbs_api'
+        return f'https://books.google.com/books/content?id={ref_id}&printsec=frontcover&img=1&zoom=0&source=gbs_api'
     if source == COVER_LITRES:
         return f'https://www.litres.ru/pub/c/cover/{ref_id}.jpg'
     return None
@@ -182,7 +182,7 @@ async def _send_cover_options(update: Update, book_id: int) -> None:
         try:
             await update.message.reply_media_group(media=media)
         except Exception:
-            return
+            pass
         number_btns = [
             InlineKeyboardButton(str(i + 1), callback_data=f'{c["source"]}:{book_id}:{c["ref_id"]}')
             for i, (_, c) in enumerate(photos)
