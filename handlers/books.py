@@ -1,8 +1,20 @@
 import re
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
 
 import api_client
+
+COVER_GOOGLE = 'cover_g'
+COVER_LITRES = 'cover_l'
+COVER_SKIP = 'cover_skip'
+
+
+def _url_from_callback(source: str, ref_id: str) -> str | None:
+    if source == COVER_GOOGLE:
+        return f'http://books.google.com/books/content?id={ref_id}&printsec=frontcover&img=1&zoom=0&source=gbs_api'
+    if source == COVER_LITRES:
+        return f'https://www.litres.ru/pub/c/cover/{ref_id}.jpg'
+    return None
 
 HELP_TEXT = (
     'Пиши /add, пробел и что-то из этого:\n'
@@ -43,12 +55,14 @@ async def addBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             )
             return
         name = tg_user.first_name or tg_user.username or 'друг'
+        book_id = result['book_id']
         await update.message.reply_text(
             f'Книга теперь в списке, {name}!\n'
             f'Название: «{title}»\n'
             f'Автор: {author_name}\n\n'
             f'Удачи на голосовании. 😈'
         )
+        await _send_cover_options(update, book_id)
     except Exception:
         await update.message.reply_text('Не удалось добавить книгу. Попробуй ещё раз.')
 
@@ -127,6 +141,58 @@ async def myBooks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         f'Вот список книг, предложенных тобой для чтения:\n{book_list}\n\n{ps}'
     )
+
+
+async def _send_cover_options(update: Update, book_id: int) -> None:
+    try:
+        found = api_client.get_book_covers(book_id)
+    except Exception:
+        return
+    if not found:
+        return
+
+    skip_btn = InlineKeyboardButton('❌', callback_data=f'{COVER_SKIP}:{book_id}')
+
+    if len(found) == 1:
+        c = found[0]
+        buttons = InlineKeyboardMarkup([[
+            InlineKeyboardButton('Берём', callback_data=f'{c["source"]}:{book_id}:{c["ref_id"]}'),
+            skip_btn,
+        ]])
+        await update.message.reply_photo(photo=c['url'], reply_markup=buttons)
+    else:
+        media = [InputMediaPhoto(media=c['url'], caption=str(i + 1)) for i, c in enumerate(found)]
+        await update.message.reply_media_group(media=media)
+        number_btns = [
+            InlineKeyboardButton(str(i + 1), callback_data=f'{c["source"]}:{book_id}:{c["ref_id"]}')
+            for i, c in enumerate(found)
+        ]
+        buttons = InlineKeyboardMarkup([number_btns + [skip_btn]])
+        await update.message.reply_text('Выбери обложку:', reply_markup=buttons)
+
+
+async def coverCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    parts = query.data.split(':', 2)
+    source = parts[0]
+
+    if source == COVER_SKIP:
+        await query.edit_message_text('Без обложки, окей.')
+        return
+
+    _, book_id_str, ref_id = parts
+    cover_url = _url_from_callback(source, ref_id)
+    if not cover_url:
+        await query.edit_message_text('Не удалось определить обложку.')
+        return
+
+    try:
+        api_client.save_cover_url(int(book_id_str), cover_url)
+        await query.edit_message_text('Обложка сохранена.')
+    except Exception:
+        await query.edit_message_text('Не удалось сохранить обложку. Попробуй ещё раз.')
 
 
 async def removeBookCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
