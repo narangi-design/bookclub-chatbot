@@ -1,8 +1,17 @@
 import re
+import httpx
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
 
 import api_client
+
+
+def _fetch_bytes(url: str) -> bytes | None:
+    try:
+        r = httpx.get(url, timeout=10, follow_redirects=True)
+        return r.content if r.status_code == 200 else None
+    except Exception:
+        return None
 
 COVER_GOOGLE = 'cover_g'
 COVER_LITRES = 'cover_l'
@@ -153,22 +162,30 @@ async def _send_cover_options(update: Update, book_id: int) -> None:
 
     skip_btn = InlineKeyboardButton('❌', callback_data=f'{COVER_SKIP}:{book_id}')
 
-    if len(found) == 1:
-        c = found[0]
-        buttons = InlineKeyboardMarkup([[
-            InlineKeyboardButton('Берём', callback_data=f'{c["source"]}:{book_id}:{c["ref_id"]}'),
-            skip_btn,
-        ]])
-        await update.message.reply_photo(photo=c['url'], reply_markup=buttons)
-    else:
-        media = [InputMediaPhoto(media=c['url'], caption=str(i + 1)) for i, c in enumerate(found)]
-        await update.message.reply_media_group(media=media)
-        number_btns = [
-            InlineKeyboardButton(str(i + 1), callback_data=f'{c["source"]}:{book_id}:{c["ref_id"]}')
-            for i, c in enumerate(found)
-        ]
-        buttons = InlineKeyboardMarkup([number_btns + [skip_btn]])
-        await update.message.reply_text('Выбери обложку:', reply_markup=buttons)
+    photos = [(_fetch_bytes(c['url']), c) for c in found]
+    photos = [(img, c) for img, c in photos if img]
+    if not photos:
+        return
+
+    try:
+        if len(photos) == 1:
+            img, c = photos[0]
+            buttons = InlineKeyboardMarkup([[
+                InlineKeyboardButton('Берём', callback_data=f'{c["source"]}:{book_id}:{c["ref_id"]}'),
+                skip_btn,
+            ]])
+            await update.message.reply_photo(photo=img, reply_markup=buttons)
+        else:
+            media = [InputMediaPhoto(media=img, caption=str(i + 1)) for i, (img, _) in enumerate(photos)]
+            await update.message.reply_media_group(media=media)
+            number_btns = [
+                InlineKeyboardButton(str(i + 1), callback_data=f'{c["source"]}:{book_id}:{c["ref_id"]}')
+                for i, (_, c) in enumerate(photos)
+            ]
+            buttons = InlineKeyboardMarkup([number_btns + [skip_btn]])
+            await update.message.reply_text('Выбери обложку:', reply_markup=buttons)
+    except Exception:
+        return
 
 
 async def coverCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
