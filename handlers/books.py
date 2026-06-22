@@ -152,20 +152,20 @@ async def myBooks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-async def _send_cover_options(message, book_id: int) -> None:
+async def _send_cover_options(message, book_id: int) -> bool:
     try:
         found = api_client.get_book_covers(book_id)
     except Exception:
-        return
+        return False
     if not found:
-        return
+        return False
 
     skip_btn = InlineKeyboardButton('❌', callback_data=f'{COVER_SKIP}:{book_id}')
 
     photos = [(_fetch_bytes(c['url']), c) for c in found]
     photos = [(img, c) for img, c in photos if img]
     if not photos:
-        return
+        return False
 
     if len(photos) == 1:
         img, c = photos[0]
@@ -176,7 +176,7 @@ async def _send_cover_options(message, book_id: int) -> None:
         try:
             await message.reply_photo(photo=img, reply_markup=buttons)
         except Exception:
-            return
+            return False
     else:
         media = [InputMediaPhoto(media=img, caption=str(i + 1)) for i, (img, _) in enumerate(photos)]
         try:
@@ -191,7 +191,8 @@ async def _send_cover_options(message, book_id: int) -> None:
         try:
             await message.reply_text('Выбери обложку:', reply_markup=buttons)
         except Exception:
-            return
+            return False
+    return True
 
 
 PICK_COVER = 'pick_cover'
@@ -220,7 +221,9 @@ async def pickCoverCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await query.answer()
     book_id = int(query.data.split(':', 1)[1])
     await query.edit_message_text('Ищу обложки...')
-    await _send_cover_options(query.message, book_id)
+    found = await _send_cover_options(query.message, book_id)
+    if not found:
+        await query.message.reply_text('Не нашёл обложки. 🥺')
 
 
 async def coverCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
