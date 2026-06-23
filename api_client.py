@@ -75,10 +75,6 @@ def search_books_to_remove(q: str) -> list[dict]:
     return response.json()
 
 
-def get_tied_books(telegram_poll_id: str) -> dict:
-    response = httpx.get(f'{_BOT_URL}/polls/{telegram_poll_id}/tied-books', headers=_HEADERS)
-    response.raise_for_status()
-    return response.json()
 
 
 def create_poll(stage: int, date: str, telegram_poll_id: str, book_ids: list[int], parent_poll_id: int | None = None) -> dict:

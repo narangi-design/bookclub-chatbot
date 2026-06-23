@@ -61,27 +61,34 @@ async def secondRound(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text('Реплайни на сообщение с опросом первого тура.')
         return
 
+    poll = reply.poll
+    options = [{'option_index': i, 'votes_count': opt.voter_count} for i, opt in enumerate(poll.options)]
+
     try:
-        result = api_client.get_tied_books(reply.poll.id)
+        result = api_client.save_poll_results(
+            telegram_poll_id=poll.id,
+            total_voters=poll.total_voter_count,
+            options=options,
+        )
     except Exception:
-        await update.message.reply_text('Не нашёл опрос. Может, результаты ещё не записаны?')
+        await update.message.reply_text('Не нашёл опрос в базе. Убедись, что опрос был создан через бота.')
         return
 
-    books = result['books']
-    parent_poll_id = result['poll_id']
-
-    if len(books) <= 1:
+    tied_books = result.get('tied_books')
+    if not tied_books:
         await update.message.reply_text('Но нам не нужен второй тур, книгу уже выбрали. 🤔')
         return
+
+    books = tied_books
+    parent_poll_id = result.get('poll_id')
 
     options = [
         f'«{b["title"]}», {b["author"]}' if b.get('author') else f'«{b["title"]}»'
         for b in books
     ]
-    chat_title = update.effective_chat.title or 'клуб'
     msg = await _send_poll(
         update, context,
-        f'Клуб, у нас второй тур голосования, выбираем один вариант.',
+        'Клуб, у нас второй тур голосования, выбираем один вариант.',
         options,
         allows_multiple_answers=False,
     )
@@ -100,7 +107,7 @@ async def secondRound(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         )
 
 
-async def pollResults(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def pollResults(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     reply = update.message.reply_to_message
     if not reply or not reply.poll:
         await update.message.reply_text('Реплайни на сообщение с опросом.')
@@ -119,6 +126,7 @@ async def pollResults(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             options=options,
         )
         winner = result.get('winner')
+        tied_books = result.get('tied_books')
         total = result.get('total_voters', poll.total_voter_count)
         if winner:
             username = f'@{winner["added_by_username"]}' if winner['added_by_username'] else 'Участник'
@@ -128,6 +136,9 @@ async def pollResults(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 f'{username}, за твою книгу проголосовали {winner["votes"]} человек!\n'
                 f'Всего в голосовании приняли участие {total} человек.'
             )
+        elif tied_books:
+            titles = ', '.join(f'«{b["title"]}»' for b in tied_books)
+            await update.message.reply_text(f'Ничья: {titles}. Нужен второй тур — запускай /second_round.')
         else:
             await update.message.reply_text('Результаты сохранены!')
     except Exception:
