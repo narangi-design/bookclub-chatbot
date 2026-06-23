@@ -6,40 +6,41 @@ import mock_db
 import api_client
 
 
-async def _send_poll(update: Update, context: ContextTypes.DEFAULT_TYPE, candidates: list) -> None:
-    if not candidates:
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text='Нет книг для голосования. Сначала добавьте книги командой /add.'
-        )
-        return
+async def _send_poll(update: Update, context: ContextTypes.DEFAULT_TYPE, question: str, options: list[str], allows_multiple_answers: bool = True):
+    msg = await context.bot.send_poll(
+        chat_id=update.effective_chat.id,
+        question=question,
+        options=options,
+        is_anonymous=False,
+        allows_multiple_answers=allows_multiple_answers,
+        open_period=86400,
+    )
+    return msg
 
-    options = [
+
+def _stage1_options(candidates: list) -> list[str]:
+    return [
         f'«{c["title"]}», {c["author_name"]} — {c["member_display_name"]}'
         for c in candidates
     ]
-    msg = await context.bot.send_poll(
-        chat_id=update.effective_chat.id,
-        question=f'Выбираем следующую книгу, {update.effective_chat.title}!',
-        options=options,
-        is_anonymous=False,
-        allows_multiple_answers=True,
-        open_period=86400,
-    )
-    return msg, candidates
 
 
 async def createPollTest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     candidates = mock_db.get_poll_candidates(n=4)
-    await _send_poll(update, context, candidates)
+    if not candidates:
+        await update.message.reply_text('Нет книг для голосования.')
+        return
+    chat_title = update.effective_chat.title or 'клуб'
+    await _send_poll(update, context, f'Выбираем следующую книгу, {chat_title}!', _stage1_options(candidates))
 
 
 async def createPoll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     candidates = api_client.get_poll_candidates(n=12)
-    result = await _send_poll(update, context, candidates)
-    if result is None:
+    if not candidates:
+        await update.message.reply_text('Нет книг для голосования. Сначала кто-нибудь должен предложить книги командой /add.')
         return
-    msg, candidates = result
+    chat_title = update.effective_chat.title or 'клуб'
+    msg = await _send_poll(update, context, f'Выбираем следующую книгу, {chat_title}!', _stage1_options(candidates))
     try:
         api_client.create_poll(
             stage=1,
@@ -51,6 +52,51 @@ async def createPoll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text='⚠️ Опрос создан, но не удалось сохранить его в базу. Запиши ID опроса вручную.',
+        )
+
+
+async def secondRound(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    reply = update.message.reply_to_message
+    if not reply or not reply.poll:
+        await update.message.reply_text('Реплайни на сообщение с опросом первого тура.')
+        return
+
+    try:
+        result = api_client.get_tied_books(reply.poll.id)
+    except Exception:
+        await update.message.reply_text('Не нашёл опрос. Может, результаты ещё не записаны?')
+        return
+
+    books = result['books']
+    parent_poll_id = result['poll_id']
+
+    if len(books) <= 1:
+        await update.message.reply_text('Но нам не нужен второй тур, книгу уже выбрали. 🤔')
+        return
+
+    options = [
+        f'«{b["title"]}», {b["author"]}' if b.get('author') else f'«{b["title"]}»'
+        for b in books
+    ]
+    chat_title = update.effective_chat.title or 'клуб'
+    msg = await _send_poll(
+        update, context,
+        f'Клуб, у нас второй тур голосования, выбираем один вариант.',
+        options,
+        allows_multiple_answers=False,
+    )
+    try:
+        api_client.create_poll(
+            stage=2,
+            date=date.today().isoformat(),
+            telegram_poll_id=msg.poll.id,
+            book_ids=[b['id'] for b in books],
+            parent_poll_id=parent_poll_id,
+        )
+    except Exception:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='⚠️ Второй тур создан, но не удалось сохранить его в базу. Запиши ID опроса вручную.',
         )
 
 
@@ -85,4 +131,4 @@ async def pollResults(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         else:
             await update.message.reply_text('Результаты сохранены!')
     except Exception:
-        await update.message.reply_text('Не удалось сохранить результаты. Может, попробовать ещё раз? Или позовите админа!')
+        await update.message.reply_text('Не удалось сохранить результаты. Может, попробовать ещё раз? Или позови админа!')

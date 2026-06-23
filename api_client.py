@@ -36,19 +36,6 @@ def add_book(title: str, author_name: str, telegram_id: int,
     return response.json()  # {'ok': True} или {'exists': True, 'existing_title': '...'}
 
 
-def create_poll(stage: int, date: str, telegram_poll_id: str, book_ids: list[int]) -> dict:
-    response = httpx.post(
-        f'{_BOT_URL}/polls',
-        json={
-            'stage': stage,
-            'date': date,
-            'telegram_poll_id': telegram_poll_id,
-            'book_ids': book_ids,
-        },
-        headers=_HEADERS,
-    )
-    response.raise_for_status()
-    return response.json()
 
 
 def save_poll_results(telegram_poll_id: str, total_voters: int, options: list[dict]) -> dict:
@@ -82,6 +69,28 @@ def search_books_to_remove(q: str) -> list[dict]:
     response = httpx.get(
         f'{_BOT_URL}/books/search',
         params={'q': q},
+        headers=_HEADERS,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def get_tied_books(telegram_poll_id: str) -> dict:
+    response = httpx.get(f'{_BOT_URL}/polls/{telegram_poll_id}/tied-books', headers=_HEADERS)
+    response.raise_for_status()
+    return response.json()
+
+
+def create_poll(stage: int, date: str, telegram_poll_id: str, book_ids: list[int], parent_poll_id: int | None = None) -> dict:
+    response = httpx.post(
+        f'{_BOT_URL}/polls',
+        json={
+            'stage': stage,
+            'date': date,
+            'telegram_poll_id': telegram_poll_id,
+            'book_ids': book_ids,
+            'parent_poll_id': parent_poll_id,
+        },
         headers=_HEADERS,
     )
     response.raise_for_status()
