@@ -40,7 +40,7 @@ class TestRemoveBook:
     @pytest.mark.asyncio
     async def test_match_found_shows_inline_keyboard(self):
         from handlers.books import removeBook
-        matches = [{'id': 1, 'title': 'Дюна', 'author': 'Фрэнк Герберт'}]
+        matches = [{'id': 1, 'title': 'Дюна', 'author_name':'Фрэнк Герберт'}]
         with patch('handlers.books.api_client.search_books_to_remove', return_value=matches):
             update = make_update()
             await removeBook(update, make_context(['Дюна']))
@@ -56,8 +56,8 @@ class TestRemoveBook:
     async def test_multiple_matches_show_all_as_buttons(self):
         from handlers.books import removeBook
         matches = [
-            {'id': 1, 'title': 'Дюна', 'author': 'Фрэнк Герберт'},
-            {'id': 2, 'title': 'Дюна Мессия', 'author': 'Фрэнк Герберт'},
+            {'id': 1, 'title': 'Дюна', 'author_name':'Фрэнк Герберт'},
+            {'id': 2, 'title': 'Дюна Мессия', 'author_name':'Фрэнк Герберт'},
         ]
         with patch('handlers.books.api_client.search_books_to_remove', return_value=matches):
             update = make_update()
@@ -85,8 +85,8 @@ class TestRemoveBook:
     async def test_no_match_shows_user_books(self):
         from handlers.books import removeBook
         my_books = [
-            {'id': 5, 'title': 'Мастер и Маргарита', 'author': 'Булгаков'},
-            {'id': 6, 'title': 'Процесс', 'author': 'Кафка'},
+            {'id': 5, 'title': 'Мастер и Маргарита', 'author_name':'Булгаков'},
+            {'id': 6, 'title': 'Процесс', 'author_name':'Кафка'},
         ]
         with patch('handlers.books.api_client.search_books_to_remove', return_value=[]), \
              patch('handlers.books.api_client.get_member_books', return_value=my_books):
@@ -122,7 +122,7 @@ class TestMyBooks:
     @pytest.mark.asyncio
     async def test_one_book_shows_singular_message(self):
         from handlers.books import myBooks
-        books = [{'id': 1, 'title': 'Дюна', 'author': 'Фрэнк Герберт'}]
+        books = [{'id': 1, 'title': 'Дюна', 'author_name':'Фрэнк Герберт'}]
         with patch('handlers.books.api_client.get_member_books', return_value=books):
             update = make_update()
             await myBooks(update, make_context())
@@ -134,7 +134,7 @@ class TestMyBooks:
     @pytest.mark.asyncio
     async def test_one_book_without_author(self):
         from handlers.books import myBooks
-        books = [{'id': 1, 'title': 'Дюна', 'author': None}]
+        books = [{'id': 1, 'title': 'Дюна', 'author_name':None}]
         with patch('handlers.books.api_client.get_member_books', return_value=books):
             update = make_update()
             await myBooks(update, make_context())
@@ -145,8 +145,8 @@ class TestMyBooks:
     async def test_multiple_books_shows_list(self):
         from handlers.books import myBooks
         books = [
-            {'id': 1, 'title': 'Дюна', 'author': 'Фрэнк Герберт'},
-            {'id': 2, 'title': 'Мастер и Маргарита', 'author': 'Булгаков'},
+            {'id': 1, 'title': 'Дюна', 'author_name':'Фрэнк Герберт'},
+            {'id': 2, 'title': 'Мастер и Маргарита', 'author_name':'Булгаков'},
         ]
         with patch('handlers.books.api_client.get_member_books', return_value=books):
             update = make_update()

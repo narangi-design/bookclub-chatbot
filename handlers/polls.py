@@ -18,11 +18,18 @@ async def _send_poll(update: Update, context: ContextTypes.DEFAULT_TYPE, questio
     return msg
 
 
-def _stage1_options(candidates: list) -> list[str]:
-    return [
-        f'«{c["title"]}», {c["author_name"]} — {c["member_display_name"]}'
-        for c in candidates
-    ]
+
+def _format_book(book: dict) -> str:
+    label = f'«{book["title"]}»'
+    if author := book.get("author_name"):
+        label += f", {author}"
+    if member := book.get("member_display_name"):
+        label += f" — {member}"
+    return label
+
+def _poll_options(books: list[dict]) -> list[str]:
+    return [_format_book(book) for book in books]
+
 
 
 async def createPollTest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -31,7 +38,7 @@ async def createPollTest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text('Нет книг для голосования.')
         return
     chat_title = update.effective_chat.title or 'клуб'
-    await _send_poll(update, context, f'Выбираем следующую книгу, {chat_title}!', _stage1_options(candidates))
+    await _send_poll(update, context, f'Выбираем следующую книгу, {chat_title}!', _poll_options(candidates))
 
 
 async def createPoll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -40,7 +47,7 @@ async def createPoll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await update.message.reply_text('Нет книг для голосования. Сначала кто-нибудь должен предложить книги командой /add.')
         return
     chat_title = update.effective_chat.title or 'клуб'
-    msg = await _send_poll(update, context, f'Выбираем следующую книгу, {chat_title}!', _stage1_options(candidates))
+    msg = await _send_poll(update, context, f'Выбираем следующую книгу, {chat_title}!', _poll_options(candidates))
     try:
         api_client.create_poll(
             stage=1,
@@ -55,6 +62,12 @@ async def createPoll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         )
 
 
+
+def _poll_vote_options(tg_poll) -> list[dict]:
+    return [{'option_index': i, 'votes_count': opt.voter_count} for i, opt in enumerate(tg_poll.options)]
+
+
+
 async def secondRound(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     reply = update.message.reply_to_message
     if not reply or not reply.poll:
@@ -62,13 +75,11 @@ async def secondRound(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     poll = reply.poll
-    options = [{'option_index': i, 'votes_count': opt.voter_count} for i, opt in enumerate(poll.options)]
-
     try:
         result = api_client.save_poll_results(
             telegram_poll_id=poll.id,
             total_voters=poll.total_voter_count,
-            options=options,
+            options=_poll_vote_options(poll),
         )
     except Exception:
         await update.message.reply_text('Не нашёл опрос в базе. Убедись, что опрос был создан через бота.')
@@ -79,17 +90,11 @@ async def secondRound(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text('Но нам не нужен второй тур, книгу уже выбрали. 🤔')
         return
 
-    books = tied_books
     parent_poll_id = result.get('poll_id')
-
-    options = [
-        f'«{b["title"]}», {b["author"]}' if b.get('author') else f'«{b["title"]}»'
-        for b in books
-    ]
     msg = await _send_poll(
         update, context,
         'Клуб, у нас второй тур голосования, выбираем один вариант.',
-        options,
+        _poll_options(tied_books),
         allows_multiple_answers=False,
     )
     try:
@@ -97,7 +102,7 @@ async def secondRound(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             stage=2,
             date=date.today().isoformat(),
             telegram_poll_id=msg.poll.id,
-            book_ids=[b['id'] for b in books],
+            book_ids=[b['id'] for b in tied_books],
             parent_poll_id=parent_poll_id,
         )
     except Exception:
@@ -114,25 +119,20 @@ async def pollResults(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     poll = reply.poll
-    options = [
-        {'option_index': i, 'votes_count': opt.voter_count}
-        for i, opt in enumerate(poll.options)
-    ]
-
     try:
         result = api_client.save_poll_results(
             telegram_poll_id=poll.id,
             total_voters=poll.total_voter_count,
-            options=options,
+            options=_poll_vote_options(poll),
         )
         winner = result.get('winner')
         tied_books = result.get('tied_books')
         total = result.get('total_voters', poll.total_voter_count)
         if winner:
-            username = f'@{winner["added_by_username"]}' if winner['added_by_username'] else 'Участник'
+            username = f'@{winner["member_username"]}' if winner['member_username'] else 'Участник'
             await update.message.reply_text(
                 f'Что мы читаем дальше:\n'
-                f'«{winner["title"]}», {winner["author"]}\n\n'
+                f'«{winner["book_title"]}», {winner["author_name"]}\n\n'
                 f'{username}, за твою книгу проголосовали {winner["votes"]} человек!\n'
                 f'Всего в голосовании приняли участие {total} человек.'
             )

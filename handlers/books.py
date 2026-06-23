@@ -77,7 +77,7 @@ async def addBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def _book_label(book: dict) -> str:
-    author = f', {book["author"]}' if book.get('author') else ''
+    author = f', {book["author_name"]}' if book.get('author_name') else ''
     return f'«{book["title"]}»{author}'
 
 
