@@ -7,6 +7,7 @@ load_dotenv()
 _API_URL = os.getenv('API_URL', 'http://localhost:8000')
 _BOT_URL = f'{_API_URL}/api/bot'
 _HEADERS = {'x-bot-secret': os.getenv('BOT_SECRET', '')}
+_TIMEOUT = httpx.Timeout(30.0)
 
 
 def get_poll_candidates(n: int = 4) -> list:
@@ -14,6 +15,7 @@ def get_poll_candidates(n: int = 4) -> list:
         f'{_BOT_URL}/poll-candidates',
         params={'n': n},
         headers=_HEADERS,
+        timeout=_TIMEOUT,
     )
     response.raise_for_status()
     return response.json()
@@ -31,11 +33,10 @@ def add_book(title: str, author_name: str, telegram_id: int,
             'telegram_fullname': telegram_fullname,
         },
         headers=_HEADERS,
+        timeout=_TIMEOUT,
     )
     response.raise_for_status()
     return response.json()  # {'ok': True} или {'exists': True, 'existing_title': '...'}
-
-
 
 
 def save_poll_results(telegram_poll_id: str, total_voters: int, options: list[dict]) -> dict:
@@ -47,6 +48,7 @@ def save_poll_results(telegram_poll_id: str, total_voters: int, options: list[di
             'options': options,
         },
         headers=_HEADERS,
+        timeout=_TIMEOUT,
     )
     response.raise_for_status()
     return response.json()
@@ -60,6 +62,7 @@ def get_member_books(telegram_id: int, telegram_username: str | None = None) -> 
         f'{_BOT_URL}/members/{telegram_id}/books',
         params=params,
         headers=_HEADERS,
+        timeout=_TIMEOUT,
     )
     response.raise_for_status()
     return response.json()
@@ -70,11 +73,10 @@ def search_books_to_remove(q: str) -> list[dict]:
         f'{_BOT_URL}/books/search',
         params={'q': q},
         headers=_HEADERS,
+        timeout=_TIMEOUT,
     )
     response.raise_for_status()
     return response.json()
-
-
 
 
 def create_poll(stage: int, date: str, telegram_poll_id: str, book_ids: list[int], parent_poll_id: int | None = None) -> dict:
@@ -88,13 +90,14 @@ def create_poll(stage: int, date: str, telegram_poll_id: str, book_ids: list[int
             'parent_poll_id': parent_poll_id,
         },
         headers=_HEADERS,
+        timeout=_TIMEOUT,
     )
     response.raise_for_status()
     return response.json()
 
 
 def get_recently_read(n: int = 5) -> list[dict]:
-    response = httpx.get(f'{_BOT_URL}/books/recently-read', params={'n': n}, headers=_HEADERS)
+    response = httpx.get(f'{_BOT_URL}/books/recently-read', params={'n': n}, headers=_HEADERS, timeout=_TIMEOUT)
     response.raise_for_status()
     return response.json()
 
@@ -104,12 +107,13 @@ def save_discussion_url(book_id: int, discussion_url: str) -> None:
         f'{_BOT_URL}/books/{book_id}/discussion_url',
         json={'discussion_url': discussion_url},
         headers=_HEADERS,
+        timeout=_TIMEOUT,
     )
     response.raise_for_status()
 
 
 def get_books_without_cover() -> list[dict]:
-    response = httpx.get(f'{_BOT_URL}/books/without-cover', headers=_HEADERS)
+    response = httpx.get(f'{_BOT_URL}/books/without-cover', headers=_HEADERS, timeout=_TIMEOUT)
     response.raise_for_status()
     return response.json()
 
@@ -118,6 +122,7 @@ def get_book_covers(book_id: int) -> list[dict]:
     response = httpx.get(
         f'{_BOT_URL}/books/{book_id}/covers',
         headers=_HEADERS,
+        timeout=_TIMEOUT,
     )
     response.raise_for_status()
     return response.json()
@@ -128,6 +133,7 @@ def save_cover_url(book_id: int, cover_url: str) -> None:
         f'{_BOT_URL}/books/{book_id}/cover_url',
         json={'cover_url': cover_url},
         headers=_HEADERS,
+        timeout=_TIMEOUT,
     )
     response.raise_for_status()
 
@@ -136,6 +142,7 @@ def remove_book(book_id: int) -> bool:
     response = httpx.delete(
         f'{_BOT_URL}/books/{book_id}',
         headers=_HEADERS,
+        timeout=_TIMEOUT,
     )
     response.raise_for_status()
     return response.json().get('found', False)
