@@ -16,6 +16,8 @@ def _fetch_bytes(url: str) -> bytes | None:
 COVER_GOOGLE = 'cover_g'
 COVER_LITRES = 'cover_l'
 COVER_SKIP = 'cover_skip'
+COVER_UPLOAD_CANCEL = 'cover_upload_cancel'
+REMOVE = 'remove'
 
 
 def _url_from_callback(source: str, ref_id: str) -> str | None:
@@ -79,6 +81,21 @@ async def addBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 def _book_label(book: dict) -> str:
     author = f', {book["author_name"]}' if book.get('author_name') else ''
     return f'«{book["title"]}»{author}'
+
+
+def _label_from_keyboard(query, callback_data: str) -> str | None:
+    if not query.message.reply_markup:
+        return None
+    for row in query.message.reply_markup.inline_keyboard:
+        for button in row:
+            if button.callback_data == callback_data:
+                return button.text
+    return None
+
+
+def _title_from_label(label: str) -> str:
+    m = re.search(r'(«.+?»)', label)
+    return m.group(1) if m else label
 
 
 async def removeBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -243,11 +260,12 @@ async def pickDiscussionCallback(update: Update, _: ContextTypes.DEFAULT_TYPE) -
     discussion_url = lines[-1].strip()
     book_id = int(payload)
 
+    book_title = _title_from_label(_label_from_keyboard(query, query.data) or f'#{book_id}')
     try:
         api_client.save_discussion_url(book_id, discussion_url)
-        await query.edit_message_text('Запись заседания сохранена.')
+        await query.edit_message_text(f'Ссылка на запись заседания по книге {book_title} сохранена.')
     except Exception:
-        await query.edit_message_text('Не удалось сохранить. Попробуй ещё раз.')
+        await query.edit_message_text(f'Не удалось сохранить ссылку для книги {book_title}. Попробуй ещё раз.')
 
 
 async def addCover(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -272,10 +290,22 @@ async def pickCoverCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     query = update.callback_query
     await query.answer()
     book_id = int(query.data.split(':', 1)[1])
+    context.user_data['cover_book_title'] = _title_from_label(_label_from_keyboard(query, query.data) or f'#{book_id}')
     await query.edit_message_text('Ищу обложки...')
     found = await _send_cover_options(query.message, book_id)
     if not found:
-        await query.message.reply_text('Не нашёл обложки. 🥺')
+        book_title = context.user_data.get('cover_book_title') or f'#{book_id}'
+        sent = await query.message.reply_text(
+            f'Не получилось найти обложку для книги {book_title}. 🥺\n'
+            f'Может, сами закинем? Скинь картинку в ответ на это сообщение.',
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton('Давай не сейчас', callback_data=COVER_UPLOAD_CANCEL)
+            ]]),
+        )
+        context.bot_data[f'pending_cover_{sent.message_id}'] = {
+            'book_id': book_id,
+            'book_title': book_title,
+        }
 
 
 async def coverCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -310,11 +340,12 @@ async def coverCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             except Exception:
                 await query.message.reply_text(text)
 
+    book_title = context.user_data.get('cover_book_title') or f'#{book_id_str}'
     try:
         api_client.save_cover_url(int(book_id_str), cover_url)
-        await _reply('Обложка сохранена.')
+        await _reply(f'{book_title} теперь с обложкой!')
     except Exception:
-        await _reply('Не удалось сохранить обложку. Попробуй ещё раз.')
+        await _reply(f'Не удалось сохранить обложку для книги {book_title}. Попробуй ещё раз.')
 
 
 async def removeBookCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -336,3 +367,36 @@ async def removeBookCallback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await query.edit_message_text('Книга не найдена — возможно, уже удалена.')
     except Exception:
         await query.edit_message_text('Не удалось удалить книгу. Попробуй ещё раз.')
+
+
+async def uploadCoverPhoto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    msg = update.message
+    if not msg.photo or not msg.reply_to_message:
+        return
+
+    pending_key = f'pending_cover_{msg.reply_to_message.message_id}'
+    pending = context.bot_data.get(pending_key)
+    if not pending:
+        return
+
+    book_id: int = pending['book_id']
+    book_title: str = pending['book_title']
+
+    photo_file = await msg.photo[-1].get_file()
+    image_bytes = bytes(await photo_file.download_as_bytearray())
+
+    try:
+        api_client.save_cover_bytes(book_id, image_bytes, 'image/jpeg')
+        await msg.reply_text(f'{book_title} теперь с обложкой!')
+        del context.bot_data[pending_key]
+    except Exception:
+        await msg.reply_text(f'Не удалось сохранить обложку для книги {book_title}. Попробуй ещё раз.')
+
+
+async def cancelCoverUploadCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    pending_key = f'pending_cover_{query.message.message_id}'
+    pending = context.bot_data.pop(pending_key, {})
+    book_title = pending.get('book_title', 'книга')
+    await query.edit_message_text(f'Окей, {book_title} пока без обложки.')

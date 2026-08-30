@@ -138,6 +138,16 @@ def save_cover_url(book_id: int, cover_url: str) -> None:
     response.raise_for_status()
 
 
+def save_cover_bytes(book_id: int, image_bytes: bytes, content_type: str = 'image/jpeg') -> None:
+    response = httpx.put(
+        f'{_BOT_URL}/books/{book_id}/cover',
+        content=image_bytes,
+        headers={**_HEADERS, 'Content-Type': content_type},
+        timeout=_TIMEOUT,
+    )
+    response.raise_for_status()
+
+
 def remove_book(book_id: int) -> bool:
     response = httpx.delete(
         f'{_BOT_URL}/books/{book_id}',
