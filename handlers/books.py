@@ -219,7 +219,22 @@ PICK_DISCUSSION = 'pick_disc'
 async def addDiscussion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     reply = update.message.reply_to_message
     if not reply:
-        await update.message.reply_text('Реплайни на сообщение с записью заседания.')
+        try:
+            books = api_client.get_recently_read(n=5)
+        except Exception:
+            await update.message.reply_text(
+                'Не удалось получить список книг без ссылки на заседание.\n'
+                'Если хочешь добавить ссылку, напиши эту команду реплаем на запись дискуссии.'
+            )
+            return
+        if not books:
+            await update.message.reply_text('Все недавно прочитанные книги уже с записью заседания 🎉')
+            return
+        book_list = '\n'.join(f'· {_book_label(b)}' for b in books)
+        await update.message.reply_text(
+            f'Реплайни на сообщение с записью заседания.\n\n'
+            f'Книги без записи:\n{book_list}'
+        )
         return
 
     chat_id = update.effective_chat.id
