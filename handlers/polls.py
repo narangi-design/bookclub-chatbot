@@ -129,13 +129,28 @@ async def pollResults(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         tied_books = result.get('tied_books')
         total = result.get('total_voters', poll.total_voter_count)
         if winner:
-            username = f'@{winner["member_username"]}' if winner['member_username'] else 'Участник'
-            await update.message.reply_text(
-                f'Что мы читаем дальше:\n'
-                f'«{winner["book_title"]}», {winner["author_name"]}\n\n'
-                f'{username}, за твою книгу проголосовали {winner["votes"]} человек!\n'
-                f'Всего в голосовании приняли участие {total} человек.'
+            member = (
+                f'@{winner["member_username"]}' if winner.get('member_username')
+                else winner.get('member_fullname') or 'Участник'
             )
+            added_at = ''
+            if winner.get('added_at'):
+                d = winner['added_at'][:10].split('-')
+                added_at = f'\nЖдёт своего часа с: {d[2]}.{d[1]}.{d[0][2:]}'
+            appearances = winner.get('poll_appearances') or 0
+            text = (
+                f'Голосование завершено!\n\n'
+                f'Выбор клуба: «{winner["book_title"]}», {winner["author_name"]}\n'
+                f'В списке благодаря: {member}'
+                f'{added_at}\n'
+                f'Голосований пройдено: {appearances}\n'
+                f'{winner["votes"]} из {total} голосов'
+            )
+            cover_url = winner.get('cover_url')
+            if cover_url:
+                await update.message.reply_photo(photo=cover_url, caption=text)
+            else:
+                await update.message.reply_text(text)
         elif tied_books:
             titles = ', '.join(f'«{b["title"]}»' for b in tied_books)
             await update.message.reply_text(f'Ничья: {titles}. Нужен второй тур — запускай /second_round.')
