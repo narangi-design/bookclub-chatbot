@@ -1,3 +1,5 @@
+import asyncio
+import logging
 import re
 import httpx
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
@@ -5,12 +7,22 @@ from telegram.ext import ContextTypes
 
 import api_client
 
+logger = logging.getLogger(__name__)
 
-def _fetch_bytes(url: str) -> bytes | None:
+# Telegram caps sendMediaGroup at 10 items — cover_search.py can return more
+# candidates than that, so the list needs trimming before it gets there.
+MAX_MEDIA_GROUP_SIZE = 10
+
+
+async def _fetch_bytes(url: str) -> bytes | None:
     try:
-        r = httpx.get(url, timeout=10, follow_redirects=True)
-        return r.content if r.status_code == 200 else None
+        r = await asyncio.to_thread(httpx.get, url, timeout=10, follow_redirects=True)
+        if r.status_code == 200:
+            return r.content
+        logger.warning('Cover fetch %s returned status %s', url, r.status_code)
+        return None
     except Exception:
+        logger.warning('Cover fetch %s failed', url, exc_info=True)
         return None
 
 COVER_GOOGLE = 'cover_g'
@@ -53,7 +65,7 @@ async def addBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     tg_user = update.effective_user
 
     try:
-        result = api_client.add_book(
+        result = await api_client.add_book(
             title=title,
             author_name=author_name,
             telegram_id=tg_user.id,
@@ -73,6 +85,11 @@ async def addBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f'Автор: {author_name}\n\n'
             f'Удачи на голосовании. 😈'
         )
+        # coverCallback reads this to name the book in its reply — without it,
+        # it falls back to "#<id>" (pickCoverCallback sets the same key for
+        # the /cover flow; addBook needs its own since it calls
+        # _send_cover_options directly, skipping that handler).
+        context.user_data['cover_book_title'] = f'«{title}»'
         await _send_cover_options(update.message, book_id)
     except Exception:
         await update.message.reply_text('Не удалось добавить книгу. Попробуй ещё раз.')
@@ -108,14 +125,14 @@ async def removeBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         return
 
     try:
-        matches = api_client.search_books_to_remove(query)
+        matches = await api_client.search_books_to_remove(query)
     except Exception:
         await update.message.reply_text('Не удалось найти книгу. Попробуй ещё раз.')
         return
 
     if not matches:
         try:
-            my_books = api_client.get_member_books(update.effective_user.id, update.effective_user.username)
+            my_books = await api_client.get_member_books(update.effective_user.id, update.effective_user.username)
         except Exception:
             my_books = []
 
@@ -143,7 +160,7 @@ async def removeBook(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def myBooks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
-        books = api_client.get_member_books(update.effective_user.id, update.effective_user.username)
+        books = await api_client.get_member_books(update.effective_user.id, update.effective_user.username)
     except Exception:
         await update.message.reply_text('Не удалось получить список книг. Попробуй ещё раз.')
         return
@@ -171,16 +188,25 @@ async def myBooks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def _send_cover_options(message, book_id: int) -> bool:
     try:
-        found = api_client.get_book_covers(book_id)
+        found = await api_client.get_book_covers(book_id)
     except Exception:
+        logger.warning('get_book_covers(%s) failed', book_id, exc_info=True)
         return False
     if not found:
         return False
 
+    # Telegram rejects sendMediaGroup outright above MAX_MEDIA_GROUP_SIZE
+    # items — trim before fetching so we're not also downloading covers
+    # (each potentially 1MB+) that could never be sent anyway.
+    found = found[:MAX_MEDIA_GROUP_SIZE]
+
     skip_btn = InlineKeyboardButton('❌', callback_data=f'{COVER_SKIP}:{book_id}')
 
-    photos = [(_fetch_bytes(c['url']), c) for c in found]
-    photos = [(img, c) for img, c in photos if img]
+    # Concurrent, not sequential — 10 sequential fetches at ~1-2s each
+    # (litres.ru's anti-bot layer adds real per-request latency) used to
+    # mean a 10-20s wait; in parallel it's bounded by the slowest one.
+    fetched = await asyncio.gather(*(_fetch_bytes(c['url']) for c in found))
+    photos = [(img, c) for img, c in zip(fetched, found) if img]
     if not photos:
         return False
 
@@ -193,13 +219,17 @@ async def _send_cover_options(message, book_id: int) -> bool:
         try:
             await message.reply_photo(photo=img, reply_markup=buttons)
         except Exception:
+            logger.warning('reply_photo failed for book %s', book_id, exc_info=True)
             return False
     else:
         media = [InputMediaPhoto(media=img, caption=str(i + 1)) for i, (img, _) in enumerate(photos)]
         try:
             await message.reply_media_group(media=media)
         except Exception:
-            pass
+            # Non-fatal: the numbered buttons below still let the user pick
+            # a cover by number even if the preview images failed to send —
+            # but log it, this used to fail silently.
+            logger.warning('reply_media_group failed for book %s (%d photos)', book_id, len(media), exc_info=True)
         number_btns = [
             InlineKeyboardButton(str(i + 1), callback_data=f'{c["source"]}:{book_id}:{c["ref_id"]}')
             for i, (_, c) in enumerate(photos)
@@ -208,6 +238,7 @@ async def _send_cover_options(message, book_id: int) -> bool:
         try:
             await message.reply_text('Выбери обложку:', reply_markup=buttons)
         except Exception:
+            logger.warning('reply_text (cover picker) failed for book %s', book_id, exc_info=True)
             return False
     return True
 
@@ -220,7 +251,7 @@ async def addDiscussion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     reply = update.message.reply_to_message
     if not reply:
         try:
-            books = api_client.get_recently_read(n=5)
+            books = await api_client.get_recently_read(n=5)
         except Exception:
             await update.message.reply_text(
                 'Не удалось получить список книг без ссылки на заседание.\n'
@@ -242,7 +273,7 @@ async def addDiscussion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     discussion_url = f'https://t.me/c/{short_id}/{reply.message_id}'
 
     try:
-        books = api_client.get_recently_read(n=5)
+        books = await api_client.get_recently_read(n=5)
     except Exception:
         await update.message.reply_text('Не удалось получить список книг. Попробуй ещё раз.')
         return
@@ -277,7 +308,7 @@ async def pickDiscussionCallback(update: Update, _: ContextTypes.DEFAULT_TYPE) -
 
     book_title = _title_from_label(_label_from_keyboard(query, query.data) or f'#{book_id}')
     try:
-        api_client.save_discussion_url(book_id, discussion_url)
+        await api_client.save_discussion_url(book_id, discussion_url)
         await query.edit_message_text(f'Ссылка на запись заседания по книге {book_title} сохранена.')
     except Exception:
         await query.edit_message_text(f'Не удалось сохранить ссылку для книги {book_title}. Попробуй ещё раз.')
@@ -285,7 +316,7 @@ async def pickDiscussionCallback(update: Update, _: ContextTypes.DEFAULT_TYPE) -
 
 async def addCover(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
-        books = api_client.get_books_without_cover()
+        books = await api_client.get_books_without_cover()
     except Exception:
         await update.message.reply_text('Не удалось получить список книг. Попробуй ещё раз.')
         return
@@ -357,7 +388,7 @@ async def coverCallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     book_title = context.user_data.get('cover_book_title') or f'#{book_id_str}'
     try:
-        api_client.save_cover_url(int(book_id_str), cover_url)
+        await api_client.save_cover_url(int(book_id_str), cover_url)
         await _reply(f'{book_title} теперь с обложкой!')
     except Exception:
         await _reply(f'Не удалось сохранить обложку для книги {book_title}. Попробуй ещё раз.')
@@ -375,7 +406,7 @@ async def removeBookCallback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     try:
-        found = api_client.remove_book(book_id=int(payload))
+        found = await api_client.remove_book(book_id=int(payload))
         if found:
             await query.edit_message_text('Книга удалена из списка.')
         else:
@@ -401,7 +432,7 @@ async def uploadCoverPhoto(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     image_bytes = bytes(await photo_file.download_as_bytearray())
 
     try:
-        api_client.save_cover_bytes(book_id, image_bytes, 'image/jpeg')
+        await api_client.save_cover_bytes(book_id, image_bytes, 'image/jpeg')
         await msg.reply_text(f'{book_title} теперь с обложкой!')
         del context.bot_data[pending_key]
     except Exception:

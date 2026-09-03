@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from tests.conftest import make_update, make_context
 
@@ -16,17 +16,29 @@ def make_add_context(text: str):
     context.args = text.split() if text else []
     return context
 
+
+def make_remove_query(book_id: int = 1):
+    """callback_query как после нажатия кнопки с книгой в /remove (REMOVE:book_id)."""
+    query = MagicMock()
+    query.data = f'remove:{book_id}'
+    query.answer = AsyncMock()
+    query.edit_message_text = AsyncMock()
+    update = MagicMock()
+    update.callback_query = query
+    return update, query
+
 @pytest.mark.asyncio
-async def test_start_sends_greeting():
-    from handlers.common import start
+async def test_hello_sends_greeting():
+    """/hello отвечает приветствием с именем пользователя."""
+    from handlers.common import hello
 
     update = make_update()
     context = make_context()
-    await start(update, context)
+    await hello(update, context)
 
-    context.bot.send_message.assert_called_once()
-    _, kwargs = context.bot.send_message.call_args
-    assert 'привет' in kwargs.get('text', '').lower()
+    text = update.message.reply_text.call_args[0][0]
+    assert 'привет' in text.lower()
+    assert update.effective_user.name in text
 
 @pytest.mark.asyncio
 async def test_add_no_args_shows_help():
@@ -67,13 +79,16 @@ async def test_add_valid_format_calls_api(text, expected_author, expected_title)
     from handlers.books import addBook
 
     update = make_add_update()
-    with patch('handlers.books.api_client.add_book') as mock_add:
+    with patch('handlers.books.api_client.add_book', return_value={'ok': True, 'book_id': 1}) as mock_add, \
+         patch('handlers.books.api_client.get_book_covers', return_value=[]):
         await addBook(update, make_add_context(text))
 
     mock_add.assert_called_once_with(
         title=expected_title,
         author_name=expected_author,
         telegram_id=update.effective_user.id,
+        telegram_username=update.effective_user.username,
+        telegram_fullname=update.effective_user.full_name,
     )
 
 @pytest.mark.asyncio
@@ -82,7 +97,8 @@ async def test_add_success_message_contains_user_name():
     from handlers.books import addBook
 
     update = make_add_update(first_name='Алёна')
-    with patch('handlers.books.api_client.add_book'):
+    with patch('handlers.books.api_client.add_book', return_value={'ok': True, 'book_id': 1}), \
+         patch('handlers.books.api_client.get_book_covers', return_value=[]):
         await addBook(update, make_add_context('Михаил Булгаков — Мастер и Маргарита'))
 
     text = update.message.reply_text.call_args[0][0]
@@ -95,7 +111,8 @@ async def test_add_success_message_contains_title_and_author():
     from handlers.books import addBook
 
     update = make_add_update()
-    with patch('handlers.books.api_client.add_book'):
+    with patch('handlers.books.api_client.add_book', return_value={'ok': True, 'book_id': 1}), \
+         patch('handlers.books.api_client.get_book_covers', return_value=[]):
         await addBook(update, make_add_context('Михаил Булгаков — Мастер и Маргарита'))
 
     text = update.message.reply_text.call_args[0][0]
@@ -161,38 +178,38 @@ async def test_remove_no_args_shows_hint():
 
 @pytest.mark.asyncio
 async def test_remove_found_confirms():
-    """/remove с существующей книгой подтверждает удаление."""
-    from handlers.books import removeBook
+    """Нажатие кнопки с найденной книгой подтверждает удаление."""
+    from handlers.books import removeBookCallback
 
-    update = make_update()
+    update, query = make_remove_query(book_id=5)
     with patch('handlers.books.api_client.remove_book', return_value=True):
-        await removeBook(update, make_add_context('Мастер и Маргарита'))
+        await removeBookCallback(update, make_context())
 
-    text = update.message.reply_text.call_args[0][0]
+    text = query.edit_message_text.call_args[0][0]
     assert 'удален' in text.lower()
 
 
 @pytest.mark.asyncio
 async def test_remove_not_found_notifies():
-    """/remove с несуществующей книгой сообщает, что не нашлось."""
-    from handlers.books import removeBook
+    """Книга уже пропала (например, удалена кем-то ещё) — бот сообщает об этом."""
+    from handlers.books import removeBookCallback
 
-    update = make_update()
+    update, query = make_remove_query(book_id=5)
     with patch('handlers.books.api_client.remove_book', return_value=False):
-        await removeBook(update, make_add_context('Нет такой книги'))
+        await removeBookCallback(update, make_context())
 
-    text = update.message.reply_text.call_args[0][0]
+    text = query.edit_message_text.call_args[0][0]
     assert 'не найден' in text.lower()
 
 
 @pytest.mark.asyncio
 async def test_remove_api_error_shows_error_message():
     """Ошибка API при удалении показывает сообщение об ошибке."""
-    from handlers.books import removeBook
+    from handlers.books import removeBookCallback
 
-    update = make_update()
+    update, query = make_remove_query(book_id=5)
     with patch('handlers.books.api_client.remove_book', side_effect=Exception('API error')):
-        await removeBook(update, make_add_context('Мастер и Маргарита'))
+        await removeBookCallback(update, make_context())
 
-    text = update.message.reply_text.call_args[0][0]
+    text = query.edit_message_text.call_args[0][0]
     assert 'не удалось' in text.lower()

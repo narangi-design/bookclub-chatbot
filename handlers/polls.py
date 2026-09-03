@@ -42,14 +42,14 @@ async def createPollTest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 async def createPoll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    candidates = api_client.get_poll_candidates(n=12)
+    candidates = await api_client.get_poll_candidates(n=12)
     if not candidates:
         await update.message.reply_text('Нет книг для голосования. Сначала кто-нибудь должен предложить книги командой /add.')
         return
     chat_title = update.effective_chat.title or 'клуб'
     msg = await _send_poll(update, context, f'Выбираем следующую книгу, {chat_title}!', _poll_options(candidates))
     try:
-        api_client.create_poll(
+        await api_client.create_poll(
             stage=1,
             date=date.today().isoformat(),
             telegram_poll_id=msg.poll.id,
@@ -76,7 +76,7 @@ async def secondRound(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     poll = reply.poll
     try:
-        result = api_client.save_poll_results(
+        result = await api_client.save_poll_results(
             telegram_poll_id=poll.id,
             total_voters=poll.total_voter_count,
             options=_poll_vote_options(poll),
@@ -98,7 +98,7 @@ async def secondRound(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         allows_multiple_answers=False,
     )
     try:
-        api_client.create_poll(
+        await api_client.create_poll(
             stage=2,
             date=date.today().isoformat(),
             telegram_poll_id=msg.poll.id,
@@ -120,7 +120,7 @@ async def pollResults(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     poll = reply.poll
     try:
-        result = api_client.save_poll_results(
+        result = await api_client.save_poll_results(
             telegram_poll_id=poll.id,
             total_voters=poll.total_voter_count,
             options=_poll_vote_options(poll),

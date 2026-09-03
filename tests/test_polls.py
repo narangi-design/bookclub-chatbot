@@ -45,11 +45,12 @@ async def test_create_poll_test_no_candidates():
     from handlers.polls import createPollTest
 
     context = make_context()
+    update = make_poll_update()
     with patch("handlers.polls.mock_db.get_poll_candidates", return_value=empty_books):
-        await createPollTest(make_poll_update(), context)
+        await createPollTest(update, context)
 
     context.bot.send_poll.assert_not_called()
-    context.bot.send_message.assert_called_once()
+    update.message.reply_text.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -75,11 +76,12 @@ async def test_create_poll_no_candidates():
     from handlers.polls import createPoll
 
     context = make_context()
+    update = make_poll_update()
     with patch("handlers.polls.api_client.get_poll_candidates", return_value=[]):
-        await createPoll(make_poll_update(), context)
+        await createPoll(update, context)
 
     context.bot.send_poll.assert_not_called()
-    context.bot.send_message.assert_called_once()
+    update.message.reply_text.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

@@ -22,7 +22,21 @@ from handlers.polls import createPoll, createPollTest, pollResults, secondRound
 
 
 def _build_app() -> Application:
-    tg_app = Application.builder().token(os.getenv('BOT_TOKEN', '')).build()
+    # Default read/write timeouts (~5s) are too short for sending a
+    # multi-photo cover media group (up to MAX_MEDIA_GROUP_SIZE images,
+    # each up to a few MB) — bump them so a slow upload times out on
+    # Telegram's own terms instead of ours. media_write_timeout covers
+    # photo/media uploads specifically; write_timeout covers everything else.
+    tg_app = (
+        Application.builder()
+        .token(os.getenv('BOT_TOKEN', ''))
+        .read_timeout(30)
+        .write_timeout(30)
+        .media_write_timeout(60)
+        .connect_timeout(15)
+        .pool_timeout(10)
+        .build()
+    )
     tg_app.add_handler(CommandHandler('help', helpCommand))
     tg_app.add_handler(CommandHandler('hello', hello))
     tg_app.add_handler(CommandHandler('myid', myid))
