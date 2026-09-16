@@ -147,7 +147,7 @@ async def get_book_covers(book_id: int) -> list[dict]:
     return response.json()
 
 
-async def save_cover_url(book_id: int, cover_url: str) -> None:
+async def save_cover_url(book_id: int, cover_url: str) -> dict:
     response = await asyncio.to_thread(
         httpx.put,
         f'{_BOT_URL}/books/{book_id}/cover_url',
@@ -156,9 +156,10 @@ async def save_cover_url(book_id: int, cover_url: str) -> None:
         timeout=_TIMEOUT,
     )
     response.raise_for_status()
+    return response.json()  # {'ok': True, 'title': '...'}
 
 
-async def save_cover_bytes(book_id: int, image_bytes: bytes, content_type: str = 'image/jpeg') -> None:
+async def save_cover_bytes(book_id: int, image_bytes: bytes, content_type: str = 'image/jpeg') -> dict:
     response = await asyncio.to_thread(
         httpx.put,
         f'{_BOT_URL}/books/{book_id}/cover',
@@ -167,6 +168,7 @@ async def save_cover_bytes(book_id: int, image_bytes: bytes, content_type: str =
         timeout=_TIMEOUT,
     )
     response.raise_for_status()
+    return response.json()  # {'ok': True, 'title': '...'}
 
 
 async def remove_book(book_id: int) -> bool:

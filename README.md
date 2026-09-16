@@ -1,6 +1,6 @@
 # bookclub-chatbot
 
-Telegram bot for a book club. Handles nominations, voting, cover images, and discussion recordings. Runs as a Vercel Serverless Function via webhook.
+Telegram bot for a book club. Handles nominations, voting, cover images, and discussion recordings. Runs in Docker on a private VPS, served by uvicorn, receiving updates via webhook.
 
 Part of the [Book Club](https://github.com/stars/narangi-design/lists/book-club) project — all bot data is stored and served through [Book Club API](https://github.com/narangi-design/bookclub-api), and the same data is visualised in the [Web Dashboard](https://github.com/narangi-design/bookclub-frontend).
 
@@ -11,7 +11,7 @@ Part of the [Book Club](https://github.com/stars/narangi-design/lists/book-club)
 ## Stack
 
 - **python-telegram-bot 22.7** — command and callback handlers
-- **FastAPI** + **Mangum** — Vercel adapter
+- **FastAPI** + **uvicorn** — webhook server, run in Docker on a private VPS
 - **httpx** — requests to bookclub-api and cover image downloading
 
 ---
@@ -42,11 +42,11 @@ pip install -r requirements.txt
 Required `.env`:
 ```
 BOT_TOKEN=
-API_URL=https://your-api.vercel.app
+API_URL=https://your-api.example.com
 BOT_SECRET=
 ```
 
-In production the bot receives updates via webhook (Vercel URL). For local testing, use ngrok or a similar tunnel and register the URL with Telegram's `setWebhook`.
+In production the bot receives updates via webhook (the VPS's public URL). For local testing, use ngrok or a similar tunnel and register the URL with Telegram's `setWebhook`.
 
 ### Tests
 
@@ -74,7 +74,7 @@ Both `/results` and `/second_round` go through the same `save_poll_results` API 
 
 ## Future improvements
 
-- Automated weekly rubric posts via Vercel Cron (reading tips, anniversaries, etc.)
+- Automated weekly rubric posts via a scheduled job on the VPS (reading tips, anniversaries, etc.)
 - Extract discussion recording duration from the video message metadata
 ---
 

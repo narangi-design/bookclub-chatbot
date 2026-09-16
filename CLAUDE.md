@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Telegram bot for a book club: nominations, voting, cover images, discussion recordings. Deployed as a Vercel Serverless Function (webhook, not polling). All bot-facing text is in Russian — keep new user-facing strings in Russian, matching the existing tone (casual, emoji-sprinkled).
+Telegram bot for a book club: nominations, voting, cover images, discussion recordings. Deployed via Docker on a private VPS, served by uvicorn, receiving Telegram updates over webhook (not polling). All bot-facing text is in Russian — keep new user-facing strings in Russian, matching the existing tone (casual, emoji-sprinkled).
 
 This bot is one of three related repos and only handles the Telegram layer — it has no database of its own:
 - **bookclub-api** — stores and serves all data; this bot calls it via `api_client.py`
@@ -23,7 +23,7 @@ pip install -r requirements.txt          # install deps (Python 3.11+)
 Required `.env` (not committed):
 ```
 BOT_TOKEN=
-API_URL=https://your-api.vercel.app
+API_URL=https://your-api.example.com
 BOT_SECRET=
 ```
 
@@ -31,7 +31,7 @@ Local testing needs a public URL for Telegram's webhook (ngrok or similar) regis
 
 ## Architecture
 
-**Request flow:** Telegram → webhook POST `/` (`api/index.py`) → single FastAPI `app` wrapped by Mangum for Vercel → `Update` dispatched through a python-telegram-bot `Application` whose handlers are all registered once in `_build_app()`. The `Application` is built at module import time (not per-request) and lazily `initialize()`d on first webhook call.
+**Request flow:** Telegram → webhook POST `/` (`api/index.py`) → single FastAPI `app` served directly by uvicorn → `Update` dispatched through a python-telegram-bot `Application` whose handlers are all registered once in `_build_app()`. The `Application` is built at module import time (not per-request) and lazily `initialize()`d on first webhook call.
 
 **Layering:** `handlers/*.py` (Telegram-facing: parse commands/callbacks, format Russian reply text) → `api_client.py` (thin httpx wrapper over bookclub-api, `x-bot-secret` header auth, 30s timeout) → external API. Handlers never call httpx directly; all backend I/O goes through `api_client`. Each handler function wraps its `api_client` call in try/except and replies with a Russian fallback message on failure — no exceptions should escape a handler.
 

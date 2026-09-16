@@ -56,6 +56,95 @@ class TestTitleFromLabel:
         assert _title_from_label('#42') == '#42'
 
 
+# ─── coverCallback ─────────────────────────────────────────────────────────────
+
+def make_cover_query(callback_data: str):
+    message = MagicMock()
+    message.reply_markup = None
+    query = MagicMock()
+    query.data = callback_data
+    query.message = message
+    query.answer = AsyncMock()
+    query.edit_message_text = AsyncMock()
+    update = MagicMock()
+    update.callback_query = query
+    ctx = MagicMock()
+    ctx.user_data = {}
+    return update, ctx
+
+
+class TestCoverCallback:
+    @pytest.mark.asyncio
+    async def test_success_uses_title_from_api_response(self):
+        from handlers.books import coverCallback, COVER_GOOGLE
+        update, ctx = make_cover_query(f'{COVER_GOOGLE}:7:abc123')
+        with patch('handlers.books.api_client.save_cover_url', return_value={'ok': True, 'title': 'Анна Каренина'}):
+            await coverCallback(update, ctx)
+        text = update.callback_query.edit_message_text.call_args[0][0]
+        assert '«Анна Каренина»' in text
+
+    @pytest.mark.asyncio
+    async def test_success_ignores_stale_user_data(self):
+        # Regression test: the confirmation must name the book the callback_data
+        # actually points at, not a title cached from an unrelated /add or /cover
+        # flow for the same Telegram user.
+        from handlers.books import coverCallback, COVER_GOOGLE
+        update, ctx = make_cover_query(f'{COVER_GOOGLE}:7:abc123')
+        ctx.user_data['cover_book_title'] = '«Война и мир»'
+        with patch('handlers.books.api_client.save_cover_url', return_value={'ok': True, 'title': 'Анна Каренина'}):
+            await coverCallback(update, ctx)
+        text = update.callback_query.edit_message_text.call_args[0][0]
+        assert '«Анна Каренина»' in text
+        assert 'Война и мир' not in text
+
+    @pytest.mark.asyncio
+    async def test_api_error_falls_back_to_book_id(self):
+        from handlers.books import coverCallback, COVER_GOOGLE
+        update, ctx = make_cover_query(f'{COVER_GOOGLE}:7:abc123')
+        with patch('handlers.books.api_client.save_cover_url', side_effect=Exception('boom')):
+            await coverCallback(update, ctx)
+        text = update.callback_query.edit_message_text.call_args[0][0]
+        assert '#7' in text
+        assert 'Не удалось' in text
+
+
+# ─── pickCoverCallback ───────────────────────────────────────────────────────
+
+class TestPickCoverCallback:
+    @pytest.mark.asyncio
+    async def test_not_found_uses_title_from_keyboard_label(self):
+        from handlers.books import pickCoverCallback, PICK_COVER
+
+        button = MagicMock()
+        button.callback_data = f'{PICK_COVER}:7'
+        button.text = '«Анна Каренина», Лев Толстой'
+        markup = MagicMock()
+        markup.inline_keyboard = [[button]]
+
+        message = MagicMock()
+        message.reply_markup = markup
+        message.reply_text = AsyncMock(return_value=MagicMock(message_id=55))
+
+        query = MagicMock()
+        query.data = f'{PICK_COVER}:7'
+        query.message = message
+        query.answer = AsyncMock()
+        query.edit_message_text = AsyncMock()
+
+        update = MagicMock()
+        update.callback_query = query
+        ctx = MagicMock()
+        ctx.bot_data = {}
+        ctx.user_data = {}
+
+        with patch('handlers.books.api_client.get_book_covers', return_value=[]):
+            await pickCoverCallback(update, ctx)
+
+        text = message.reply_text.call_args[0][0]
+        assert '«Анна Каренина»' in text
+        assert ctx.bot_data['pending_cover_55']['book_title'] == '«Анна Каренина»'
+
+
 # ─── cancelCoverUploadCallback ────────────────────────────────────────────────
 
 class TestCancelCoverUploadCallback:
@@ -89,7 +178,7 @@ class TestUploadCoverPhoto:
         update, ctx = make_photo_update(reply_message_id=10)
         ctx.bot_data['pending_cover_10'] = {'book_id': 7, 'book_title': '«Пиранези»'}
 
-        with patch('handlers.books.api_client.save_cover_bytes'):
+        with patch('handlers.books.api_client.save_cover_bytes', return_value={'ok': True, 'title': 'Пиранези'}):
             await uploadCoverPhoto(update, ctx)
 
         text = update.message.reply_text.call_args[0][0]

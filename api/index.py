@@ -3,7 +3,6 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastapi import FastAPI, Request, Response
-from mangum import Mangum
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from dotenv import load_dotenv
@@ -70,6 +69,3 @@ async def webhook(request: Request) -> Response:
     update = Update.de_json(data, _tg_app.bot)
     await _tg_app.process_update(update)
     return Response(status_code=200)
-
-
-handler = Mangum(app)
