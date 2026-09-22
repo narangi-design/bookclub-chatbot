@@ -44,6 +44,7 @@ Required `.env`:
 BOT_TOKEN=
 API_URL=https://your-api.example.com
 BOT_SECRET=
+FRONTEND_URL=https://your-frontend.example.com   # used to build /survey and /survey/results links in survey announcements
 ```
 
 In production the bot receives updates via webhook (the VPS's public URL). For local testing, use ngrok or a similar tunnel and register the URL with Telegram's `setWebhook`.

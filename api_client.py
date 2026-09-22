@@ -180,3 +180,24 @@ async def remove_book(book_id: int) -> bool:
     )
     response.raise_for_status()
     return response.json().get('found', False)
+
+
+# The three functions below hit public endpoints directly under _API_URL
+# (not _BOT_URL) — no x-bot-secret needed, same data the frontend reads.
+
+async def get_survey_meta() -> dict:
+    response = await asyncio.to_thread(httpx.get, f'{_API_URL}/api/survey/meta', timeout=_TIMEOUT)
+    response.raise_for_status()
+    return response.json()
+
+
+async def get_survey_tiebreaks() -> list[dict]:
+    response = await asyncio.to_thread(httpx.get, f'{_API_URL}/api/survey/tiebreaks', timeout=_TIMEOUT)
+    response.raise_for_status()
+    return response.json()
+
+
+async def get_award_events() -> list[dict]:
+    response = await asyncio.to_thread(httpx.get, f'{_API_URL}/api/award-events', timeout=_TIMEOUT)
+    response.raise_for_status()
+    return response.json()

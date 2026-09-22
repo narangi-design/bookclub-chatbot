@@ -18,6 +18,7 @@ from handlers.books import (
     REMOVE, PICK_COVER, PICK_DISCUSSION, COVER_GOOGLE, COVER_LITRES, COVER_SKIP, COVER_UPLOAD_CANCEL,
 )
 from handlers.polls import createPoll, createPollTest, pollResults, secondRound
+from handlers.survey import surveyStart, surveyClose
 
 
 def _build_app() -> Application:
@@ -54,6 +55,8 @@ def _build_app() -> Application:
     tg_app.add_handler(CommandHandler('create_poll_test', createPollTest))
     tg_app.add_handler(CommandHandler('results', pollResults))
     tg_app.add_handler(CommandHandler('second_round', secondRound))
+    tg_app.add_handler(CommandHandler('survey_start', surveyStart))
+    tg_app.add_handler(CommandHandler('survey_close', surveyClose))
     return tg_app
 
 _tg_app = _build_app()

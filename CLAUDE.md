@@ -25,6 +25,7 @@ Required `.env` (not committed):
 BOT_TOKEN=
 API_URL=https://your-api.example.com
 BOT_SECRET=
+FRONTEND_URL=https://your-frontend.example.com
 ```
 
 Local testing needs a public URL for Telegram's webhook (ngrok or similar) registered via `setWebhook` — there is no local polling mode.
