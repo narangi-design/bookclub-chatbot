@@ -26,6 +26,7 @@ BOT_TOKEN=
 API_URL=https://your-api.example.com
 BOT_SECRET=
 FRONTEND_URL=https://your-frontend.example.com
+TELEGRAM_CHAT_ID=  # club group chat id — deadline announcement target; also limits the welcome message to that chat
 ```
 
 There is no local polling mode. Running the bot outside prod would need its own public URL + `setWebhook` — and pointing the real bot's webhook elsewhere takes prod offline, so test via the unit tests instead.
@@ -41,6 +42,10 @@ There is no local polling mode. Running the bot outside prod would need its own 
 **Stateless-by-design patterns** (see README's "Technical decisions" for the reasoning): cover callback data encodes just enough (`source:book_id:ref_id`) to reconstruct the image URL client-side; the discussion URL is round-tripped through the bot message text itself rather than stored server-side. The one place mutable in-memory state is used is `context.bot_data['pending_cover_<message_id>']`, tracking an outstanding cover-upload-by-photo request between the prompt and the user's photo reply (`MessageHandler(filters.PHOTO & filters.REPLY, uploadCoverPhoto)`).
 
 **Poll flow:** `/create_poll` samples 12 `to_read` books via `api_client.get_poll_candidates`, sends a Telegram poll, then persists it via `api_client.create_poll`. `/results` and `/second_round` both read the `Poll` off `update.message.reply_to_message.poll` and go through the same `api_client.save_poll_results` call (idempotent — safe to call again if votes are already stored) to get back a winner or a tie. `/second_round` only proceeds if the backend reports `tied_books`, creating a `stage=2` poll linked via `parent_poll_id`. Poll option formatting for both stages goes through the shared `_poll_options`/`_format_book` helpers in `handlers/polls.py`.
+
+**Survey flow (Book of the Year, `handlers/survey.py`):** entirely separate from the poll system above — `/survey_start` and `/finalize` just call public/bot-secret `bookclub-api` endpoints (`/api/survey/*`, `POST /api/bot/survey/finalize`) and announce the JSON result; no bot-side state. `/finalize` is safe to run more than once (the backend is idempotent) — its response's `status` (`finalized` | `already_closed` | `pending_tiebreaks`) drives which message goes out. The one bit of actual bot-side logic is `announceDeadlineWhenReached`, an `asyncio.sleep`-based background task started once in `api/index.py`'s FastAPI startup event — not PTB's `JobQueue`, since that needs `Application.start()`, which this webhook-driven bot never calls (only the lazy `initialize()` in the webhook handler). Recomputes the remaining time on every process restart, so a redeploy before `SURVEY_DEADLINE` just reschedules correctly; a restart *after* the deadline stays quiet rather than re-announcing (`/finalize` still works by hand regardless).
+
+**Other handlers:** `handlers/search.py` (`/search` → `GET /api/bot/books/lookup`, all statuses), `handlers/recommendations.py` (`/recommend` as a reply → `POST /api/bot/recommendations`, snapshots the replied-to message's text + entities; shown on the site's `/recommendations` page), `handlers/welcome.py` (`NEW_CHAT_MEMBERS` → greeting built from public `/api/books`, `/api/polls`, `/api/authors`, only in `TELEGRAM_CHAT_ID`'s chat when set).
 
 **Mock data / `create_poll_test`:** `mock_db.py` at the repo root is production code (imported by `handlers/polls.py`'s `createPollTest`) but sources its data from `tests/fixtures.py` — a temporary stand-in until `/create_poll_test` is retired in favor of the real `/create_poll`. Don't be surprised that non-test code imports from `tests/`.
 

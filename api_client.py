@@ -91,6 +91,42 @@ async def search_books_to_remove(q: str) -> list[dict]:
     return response.json()
 
 
+async def lookup_books(q: str) -> list[dict]:
+    """/search — all statuses, with who/when/status/discussion_url per book."""
+    response = await asyncio.to_thread(
+        httpx.get,
+        f'{_BOT_URL}/books/lookup',
+        params={'q': q},
+        headers=_HEADERS,
+        timeout=_TIMEOUT,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+async def add_recommendation(chat_id: int, message_id: int, text: str, entities: list[dict],
+                             message_date: str, author: dict, saved_by: dict) -> bool:
+    """author/saved_by: {'telegram_id', 'telegram_username', 'telegram_fullname'}.
+    Returns False if this message was already saved."""
+    response = await asyncio.to_thread(
+        httpx.post,
+        f'{_BOT_URL}/recommendations',
+        json={
+            'chat_id': chat_id,
+            'message_id': message_id,
+            'text': text,
+            'entities': entities,
+            'message_date': message_date,
+            'author': author,
+            'saved_by': saved_by,
+        },
+        headers=_HEADERS,
+        timeout=_TIMEOUT,
+    )
+    response.raise_for_status()
+    return response.json()['created']
+
+
 async def create_poll(stage: int, date: str, telegram_poll_id: str, book_ids: list[int], parent_poll_id: int | None = None) -> dict:
     response = await asyncio.to_thread(
         httpx.post,
@@ -182,8 +218,26 @@ async def remove_book(book_id: int) -> bool:
     return response.json().get('found', False)
 
 
-# The three functions below hit public endpoints directly under _API_URL
+# The functions below hit public endpoints directly under _API_URL
 # (not _BOT_URL) — no x-bot-secret needed, same data the frontend reads.
+
+async def get_books() -> list[dict]:
+    response = await asyncio.to_thread(httpx.get, f'{_API_URL}/api/books', timeout=_TIMEOUT)
+    response.raise_for_status()
+    return response.json()
+
+
+async def get_polls() -> list[dict]:
+    response = await asyncio.to_thread(httpx.get, f'{_API_URL}/api/polls', timeout=_TIMEOUT)
+    response.raise_for_status()
+    return response.json()
+
+
+async def get_authors() -> list[dict]:
+    response = await asyncio.to_thread(httpx.get, f'{_API_URL}/api/authors', timeout=_TIMEOUT)
+    response.raise_for_status()
+    return response.json()
+
 
 async def get_survey_meta() -> dict:
     response = await asyncio.to_thread(httpx.get, f'{_API_URL}/api/survey/meta', timeout=_TIMEOUT)
@@ -199,5 +253,15 @@ async def get_survey_tiebreaks() -> list[dict]:
 
 async def get_award_events() -> list[dict]:
     response = await asyncio.to_thread(httpx.get, f'{_API_URL}/api/award-events', timeout=_TIMEOUT)
+    response.raise_for_status()
+    return response.json()
+
+
+async def finalize_survey() -> dict:
+    """Triggers the same aggregation as finalize_survey.py's CLI, over HTTP —
+    a bot-secret-protected endpoint so /finalize doesn't need shell access."""
+    response = await asyncio.to_thread(
+        httpx.post, f'{_BOT_URL}/survey/finalize', headers=_HEADERS, timeout=_TIMEOUT
+    )
     response.raise_for_status()
     return response.json()

@@ -1,12 +1,14 @@
+import asyncio
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
-from telegram import Update
+from telegram import Bot, Update
 from telegram.ext import ContextTypes
 
 import api_client
 
 _FRONTEND_URL = os.getenv('FRONTEND_URL', '').rstrip('/')
+_TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
 
 _ERROR_TEXT = 'Не удалось получить данные опроса. Попробуй ещё раз или позови админа.'
 _CATEGORY_LABELS = {'favorite': 'Книга года', 'least_favorite': 'Антикнига года'}
@@ -22,6 +24,16 @@ def _results_link() -> str:
 
 def _format_date(iso: str) -> str:
     return datetime.fromisoformat(iso).strftime('%d.%m.%Y')
+
+
+def _tiebreak_invite_text(categories: list[str], deadline_iso: str) -> str:
+    lines = ['⚖️ Ничья! Нужен второй тур:']
+    for category in categories:
+        label = _CATEGORY_LABELS.get(category, category)
+        lines.append(f'— «{label}»')
+    lines.append(f'\nГолосуем до {_format_date(deadline_iso)}')
+    lines.append(_survey_link())
+    return '\n'.join(lines)
 
 
 async def surveyStart(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -40,38 +52,77 @@ async def surveyStart(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(text)
 
 
-async def surveyClose(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+async def finalizeSurvey(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+    """/finalize — triggers the same aggregation as running finalize_survey.py
+    by hand (via POST /api/bot/survey/finalize), then announces the outcome.
+    Safe to run more than once — the backend is idempotent."""
+    try:
+        result = await api_client.finalize_survey()
+    except Exception:
+        await update.message.reply_text(_ERROR_TEXT)
+        return
+
+    status = result['status']
+
+    if status == 'pending_tiebreaks':
+        try:
+            tiebreaks = await api_client.get_survey_tiebreaks()
+        except Exception:
+            await update.message.reply_text(_ERROR_TEXT)
+            return
+        unresolved = [tb for tb in tiebreaks if not tb['resolved'] and tb['category'] in result['unresolved_categories']]
+        if unresolved:
+            await update.message.reply_text(_tiebreak_invite_text(
+                [tb['category'] for tb in unresolved], unresolved[0]['deadline'],
+            ))
+        else:
+            await update.message.reply_text('Есть незакрытый тай-брейк — дождись его дедлайна и запусти close_tiebreak.py.')
+        return
+
+    if status == 'already_closed':
+        await update.message.reply_text(f'🎉 Итоги премии подведены!\n\n{_results_link()}')
+        return
+
+    # status == 'finalized' — just computed for the first time by this call.
+    if result['tiebreak_categories_opened']:
+        await update.message.reply_text(_tiebreak_invite_text(result['tiebreak_categories_opened'], result['tiebreak_deadline']))
+        return
+
+    await update.message.reply_text(f'🎉 Итоги премии подведены!\n\n{_results_link()}')
+
+
+async def announceDeadlineWhenReached(bot: Bot) -> None:
+    """Fire-and-forget background task started once at process startup:
+    sleeps until SURVEY_DEADLINE, then posts to the club chat that
+    submissions closed and /finalize is ready to run.
+
+    A plain asyncio timer rather than PTB's JobQueue — this bot runs
+    webhook-driven (see CLAUDE.md), never calling Application.start(), which
+    is what actually starts JobQueue's scheduler; a bare asyncio.sleep needs
+    nothing extra and just recomputes the remaining time on every restart.
+    If the process happens to restart exactly after the deadline has already
+    passed, this deliberately stays quiet instead of re-announcing — anyone
+    can still run /finalize by hand regardless.
+    """
+    if not _TELEGRAM_CHAT_ID:
+        return
     try:
         meta = await api_client.get_survey_meta()
-        award_events = await api_client.get_award_events()
     except Exception:
-        await update.message.reply_text(_ERROR_TEXT)
+        return
+    if meta['is_closed']:
         return
 
-    # award_events only gets a row for this year once close_survey.py has
-    # actually run — meta['is_closed'] alone just means the deadline passed,
-    # which isn't enough to tell "no tie happened" apart from "nobody's
-    # closed the survey yet".
-    results_ready = any(e['year'] == meta['year'] for e in award_events)
-    if not results_ready:
-        await update.message.reply_text('Итоги ещё не посчитаны — сначала нужно запустить close_survey.py на бэкенде.')
+    deadline = datetime.fromisoformat(meta['deadline'])
+    seconds = (deadline - datetime.now(timezone.utc)).total_seconds()
+    if seconds <= 0:
         return
 
-    try:
-        tiebreaks = await api_client.get_survey_tiebreaks()
-    except Exception:
-        await update.message.reply_text(_ERROR_TEXT)
-        return
-
-    unresolved = [tb for tb in tiebreaks if not tb['resolved']]
-    if unresolved:
-        lines = ['⚖️ Ничья! Нужен второй тур:']
-        for tb in unresolved:
-            label = _CATEGORY_LABELS.get(tb['category'], tb['category'])
-            lines.append(f'— «{label}» — голосуем до {_format_date(tb["deadline"])}')
-        lines.append('')
-        lines.append(_survey_link())
-        await update.message.reply_text('\n'.join(lines))
-        return
-
-    await update.message.reply_text(f'🎉 Итоги премии «Книга года {meta["year"]}» подведены!\n\n{_results_link()}')
+    await asyncio.sleep(seconds)
+    await bot.send_message(
+        chat_id=_TELEGRAM_CHAT_ID,
+        text=(
+            'Приём ответов на премию «Книга года» завершён!\n\n'
+            'Когда будете готовы подвести итоги — отправьте /finalize.'
+        ),
+    )

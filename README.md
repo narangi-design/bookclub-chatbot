@@ -28,6 +28,12 @@ Part of the [Book Club](https://github.com/stars/narangi-design/lists/book-club)
 | `/second_round` | Start a runoff vote when the first round is tied — reply to the tied poll |
 | `/cover` | Add a cover image to a book that doesn't have one |
 | `/discussion` | Attach a discussion recording to a book — reply to the video message |
+| `/search query` | Find a book by title or author (any status) |
+| `/recommend` | Save the replied-to message to the site's recommendations page |
+| `/survey_start` | Announce the Book of the Year survey |
+| `/finalize` | Tally the Book of the Year survey and announce results (or tiebreaks) |
+
+New members joining the club chat get an automatic welcome message.
 
 ---
 
@@ -45,6 +51,7 @@ BOT_TOKEN=
 API_URL=https://your-api.example.com
 BOT_SECRET=
 FRONTEND_URL=https://your-frontend.example.com   # used to build /survey and /survey/results links in survey announcements
+TELEGRAM_CHAT_ID=   # club group chat id — where the SURVEY_DEADLINE announcement gets posted (see handlers/survey.py's announceDeadlineWhenReached)
 ```
 
 In production the bot runs as the `chatbot` service of the project's `docker compose` stack on the VPS and receives updates via webhook at `https://bot.bookclub.narangi.design`. There is no polling mode.
@@ -86,6 +93,10 @@ api/index.py        # FastAPI app, handler registration
 handlers/
   books.py          # /add, /remove, /my_books, /cover, /discussion
   polls.py          # /create_poll, /results, /second_round
+  survey.py         # /survey_start, /finalize, deadline announcement
+  search.py         # /search
+  recommendations.py # /recommend
+  welcome.py        # greeting for new chat members
   common.py         # /help, /hello, /myid
 api_client.py       # HTTP client for bookclub-api
 mock_db.py          # Mock data for /create_poll_test

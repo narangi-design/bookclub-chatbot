@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -18,7 +19,10 @@ from handlers.books import (
     REMOVE, PICK_COVER, PICK_DISCUSSION, COVER_GOOGLE, COVER_LITRES, COVER_SKIP, COVER_UPLOAD_CANCEL,
 )
 from handlers.polls import createPoll, createPollTest, pollResults, secondRound
-from handlers.survey import surveyStart, surveyClose
+from handlers.survey import surveyStart, finalizeSurvey, announceDeadlineWhenReached
+from handlers.welcome import welcomeNewMembers
+from handlers.search import searchBooks
+from handlers.recommendations import addRecommendation
 
 
 def _build_app() -> Application:
@@ -51,17 +55,29 @@ def _build_app() -> Application:
     tg_app.add_handler(CallbackQueryHandler(coverCallback, pattern=f'^({COVER_GOOGLE}|{COVER_LITRES}|{COVER_SKIP})'))
     tg_app.add_handler(MessageHandler(filters.PHOTO & filters.REPLY, uploadCoverPhoto))
     tg_app.add_handler(CommandHandler('my_books', myBooks))
+    tg_app.add_handler(CommandHandler('search', searchBooks))
+    tg_app.add_handler(CommandHandler('recommend', addRecommendation))
     tg_app.add_handler(CommandHandler('create_poll', createPoll))
     tg_app.add_handler(CommandHandler('create_poll_test', createPollTest))
     tg_app.add_handler(CommandHandler('results', pollResults))
     tg_app.add_handler(CommandHandler('second_round', secondRound))
     tg_app.add_handler(CommandHandler('survey_start', surveyStart))
-    tg_app.add_handler(CommandHandler('survey_close', surveyClose))
+    tg_app.add_handler(CommandHandler('finalize', finalizeSurvey))
+    tg_app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcomeNewMembers))
     return tg_app
 
 _tg_app = _build_app()
 
 app = FastAPI()
+
+
+@app.on_event('startup')
+async def _on_startup():
+    # Needed here (not just lazily on first webhook call below) so the
+    # deadline-watch task below can send a message through _tg_app.bot even
+    # if no Telegram update arrives before SURVEY_DEADLINE.
+    await _tg_app.initialize()
+    asyncio.create_task(announceDeadlineWhenReached(_tg_app.bot))
 
 
 @app.post('/')
