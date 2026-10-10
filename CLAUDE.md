@@ -13,14 +13,14 @@ This bot is one of three related repos and only handles the Telegram layer — i
 ## Commands
 
 ```bash
-pip install -r requirements.txt          # install deps (Python 3.11+)
-.\venv\Scripts\pytest tests/ -v          # run all tests
-.\venv\Scripts\pytest tests/test_books_handlers.py -v          # single file
-.\venv\Scripts\pytest tests/test_books_handlers.py::TestRemoveBook -v          # single class
-.\venv\Scripts\pytest tests/test_books_handlers.py::TestRemoveBook::test_no_args_shows_help -v  # single test
+python3 -m pytest -p no:cacheprovider                                   # run all tests (from this dir, no venv on the VPS)
+python3 -m pytest -p no:cacheprovider tests/test_books_handlers.py      # single file
+python3 -m pytest -p no:cacheprovider tests/test_books_handlers.py::TestRemoveBook::test_no_args_shows_help  # single test
 ```
 
-Required `.env` (not committed):
+**Prod deploy** (this VPS, see the root `../CLAUDE.md`): `cd .. && docker compose build chatbot && docker compose up -d chatbot`. Telegram's webhook points at `https://bot.bookclub.narangi.design` → host nginx → this container.
+
+Env vars (in prod they come from the root `../.env` via `docker-compose.yml`, where `API_URL` is overridden to the internal `http://api:8000`):
 ```
 BOT_TOKEN=
 API_URL=https://your-api.example.com
@@ -28,7 +28,7 @@ BOT_SECRET=
 FRONTEND_URL=https://your-frontend.example.com
 ```
 
-Local testing needs a public URL for Telegram's webhook (ngrok or similar) registered via `setWebhook` — there is no local polling mode.
+There is no local polling mode. Running the bot outside prod would need its own public URL + `setWebhook` — and pointing the real bot's webhook elsewhere takes prod offline, so test via the unit tests instead.
 
 ## Architecture
 

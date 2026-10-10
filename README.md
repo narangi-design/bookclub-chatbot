@@ -39,7 +39,7 @@ Part of the [Book Club](https://github.com/stars/narangi-design/lists/book-club)
 pip install -r requirements.txt
 ```
 
-Required `.env`:
+Env vars (in prod: the root `.env` of the compose stack):
 ```
 BOT_TOKEN=
 API_URL=https://your-api.example.com
@@ -47,12 +47,12 @@ BOT_SECRET=
 FRONTEND_URL=https://your-frontend.example.com   # used to build /survey and /survey/results links in survey announcements
 ```
 
-In production the bot receives updates via webhook (the VPS's public URL). For local testing, use ngrok or a similar tunnel and register the URL with Telegram's `setWebhook`.
+In production the bot runs as the `chatbot` service of the project's `docker compose` stack on the VPS and receives updates via webhook at `https://bot.bookclub.narangi.design`. There is no polling mode.
 
 ### Tests
 
 ```bash
-.\venv\Scripts\pytest tests/ -v
+python3 -m pytest
 ```
 
 ---
